@@ -335,6 +335,44 @@ export class BuildCatalog {
       drawItemIcon(this.ctx, line.id, x + padding, lineY - 12, 2);
       this.ctx.fillStyle = line.locked ? "rgba(15,20,23,0.35)" : "rgba(15,20,23,0.8)";
       this.ctx.fillText(line.text, x + padding + 18, lineY);
+      if (hover) {
+        const def = BUILDINGS[line.id];
+        if (def) {
+          const sizeText = def.footprint ? `${def.footprint.w}x${def.footprint.h}` : "1x1";
+          const cost = Object.entries(def.cost)
+            .map(([key, value]) => `${key} ${value}`)
+            .join(" · ");
+          const level = def.unlockLevel ?? 1;
+          const lines = [
+            line.id.replace(/_/g, " "),
+            `Size ${sizeText} · L${level}`,
+            `Cost ${cost}`,
+          ];
+          this.drawCatalogTooltip(lines, game.ui.mouseX, game.ui.mouseY, game.view.width, game.view.height);
+        }
+      }
+    });
+    this.ctx.restore();
+  }
+
+  drawCatalogTooltip(lines, x, y, viewW, viewH) {
+    this.ctx.save();
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    const padding = 8;
+    const lineHeight = 14;
+    const width = Math.max(...lines.map((line) => this.ctx.measureText(line).width)) + padding * 2;
+    const height = lines.length * lineHeight + padding * 2 - 2;
+    let drawX = x + 14;
+    let drawY = y + 14;
+    if (drawX + width > viewW - 8) drawX = x - width - 14;
+    if (drawY + height > viewH - 8) drawY = y - height - 14;
+    this.ctx.fillStyle = "rgba(20, 26, 30, 0.85)";
+    this.ctx.fillRect(drawX, drawY, width, height);
+    this.ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    this.ctx.strokeRect(drawX, drawY, width, height);
+    this.ctx.fillStyle = "rgba(255,255,255,0.9)";
+    lines.forEach((line, idx) => {
+      this.ctx.fillText(line, drawX + padding, drawY + padding + idx * lineHeight + 2);
     });
     this.ctx.restore();
   }
@@ -592,6 +630,8 @@ export class InventoryOverlay {
       this.drawTooltip(hover, game.ui.mouseX, game.ui.mouseY);
     }
 
+    this.drawSplitPicker(game, layout);
+
     if (game.ui.cursorItem) {
       drawItemIcon(this.ctx, game.ui.cursorItem.id, game.ui.mouseX - 8, game.ui.mouseY - 8, 2);
       if (game.ui.cursorItem.count > 1) {
@@ -657,6 +697,63 @@ export class InventoryOverlay {
     this.ctx.strokeRect(drawX, drawY, width, height);
     this.ctx.fillStyle = "rgba(255,255,255,0.85)";
     this.ctx.fillText(text, drawX + 6, drawY + 12);
+    this.ctx.restore();
+  }
+
+  drawSplitPicker(game, layout) {
+    const picker = game.ui.splitPicker;
+    if (!picker?.active) {
+      game.ui.splitPickerLayout = null;
+      return;
+    }
+    const panelW = 180;
+    const panelH = 90;
+    let drawX = game.ui.mouseX + 16;
+    let drawY = game.ui.mouseY + 16;
+    drawX = clamp(drawX, layout.panel.x + 8, layout.panel.x + layout.panel.w - panelW - 8);
+    drawY = clamp(drawY, layout.panel.y + 8, layout.panel.y + layout.panel.h - panelH - 8);
+    const minus = { x: drawX + 10, y: drawY + 40, w: 20, h: 20 };
+    const plus = { x: drawX + panelW - 30, y: drawY + 40, w: 20, h: 20 };
+    const max = { x: drawX + panelW - 62, y: drawY + 40, w: 26, h: 20 };
+    const confirm = { x: drawX + 10, y: drawY + 64, w: 70, h: 20 };
+    const cancel = { x: drawX + panelW - 80, y: drawY + 64, w: 70, h: 20 };
+    game.ui.splitPickerLayout = {
+      panel: { x: drawX, y: drawY, w: panelW, h: panelH },
+      minus,
+      plus,
+      max,
+      confirm,
+      cancel,
+    };
+
+    this.ctx.save();
+    this.ctx.fillStyle = "rgba(20, 26, 30, 0.85)";
+    this.ctx.fillRect(drawX, drawY, panelW, panelH);
+    this.ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    this.ctx.strokeRect(drawX, drawY, panelW, panelH);
+    this.ctx.fillStyle = "rgba(255,255,255,0.9)";
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    this.ctx.fillText("Split Stack", drawX + 10, drawY + 16);
+    this.ctx.fillStyle = "rgba(255,255,255,0.7)";
+    this.ctx.fillText(`Amount: ${picker.amount}/${picker.max}`, drawX + 10, drawY + 32);
+
+    this.ctx.fillStyle = "rgba(255,255,255,0.15)";
+    this.ctx.fillRect(minus.x, minus.y, minus.w, minus.h);
+    this.ctx.fillRect(plus.x, plus.y, plus.w, plus.h);
+    this.ctx.fillRect(max.x, max.y, max.w, max.h);
+    this.ctx.fillStyle = "rgba(255,255,255,0.85)";
+    this.ctx.fillText("-", minus.x + 6, minus.y + 14);
+    this.ctx.fillText("+", plus.x + 6, plus.y + 14);
+    this.ctx.fillText("Max", max.x + 4, max.y + 14);
+
+    this.ctx.fillStyle = "rgba(47,111,79,0.65)";
+    this.ctx.fillRect(confirm.x, confirm.y, confirm.w, confirm.h);
+    this.ctx.fillStyle = "rgba(255,255,255,0.9)";
+    this.ctx.fillText("Confirm", confirm.x + 8, confirm.y + 14);
+    this.ctx.fillStyle = "rgba(120, 70, 64, 0.65)";
+    this.ctx.fillRect(cancel.x, cancel.y, cancel.w, cancel.h);
+    this.ctx.fillStyle = "rgba(255,255,255,0.9)";
+    this.ctx.fillText("Cancel", cancel.x + 12, cancel.y + 14);
     this.ctx.restore();
   }
 }

@@ -73,6 +73,7 @@ export class InventoryUI {
           requiredLevel,
           requiresStructure,
           structureLocked,
+          recipe,
         };
       }
     }
@@ -83,6 +84,17 @@ export class InventoryUI {
     craftSlots.forEach((slot) => {
       if (!slot.id) return;
       slot.count -= 1;
+      if (slot.count <= 0) {
+        slot.id = null;
+        slot.count = 0;
+      }
+    });
+  }
+
+  consumeRecipeCount(craftSlots, count) {
+    craftSlots.forEach((slot) => {
+      if (!slot.id) return;
+      slot.count -= count;
       if (slot.count <= 0) {
         slot.id = null;
         slot.count = 0;
@@ -102,6 +114,10 @@ export class InventoryUI {
     const result = this.getRecipeResult(game.craftingGrid, game.progression, game.structureContext);
     const output = result?.output ?? null;
     this.cursor = game.ui.cursorItem;
+    if (game.ui.splitPicker?.active) {
+      this.handleSplitPickerClick(game, x, y);
+      return;
+    }
     if (
       x >= layout.outputSlot.x &&
       x <= layout.outputSlot.x + layout.outputSlot.w &&
@@ -121,12 +137,18 @@ export class InventoryUI {
         const cursor = this.cursor;
         const maxStack = ITEMS[output.id]?.maxStack ?? 1;
         if (!cursor || cursor.id === output.id) {
-          const craftCount = button === 2 ? 1 : output.count;
-          const total = (cursor?.count ?? 0) + craftCount;
-          if (total <= maxStack) {
+          let crafts = 1;
+          if (button === 2) {
+            crafts = 1;
+          } else if (mods.shiftKey && result?.recipe) {
+            crafts = this.getMaxCrafts(result.recipe, game.craftingGrid, output, cursor?.count ?? 0);
+          }
+          const totalOutput = output.count * crafts;
+          const total = (cursor?.count ?? 0) + totalOutput;
+          if (crafts > 0 && total <= maxStack) {
             this.cursor = { id: output.id, count: total };
-            this.consumeRecipe(game.craftingGrid);
-            game.onCraft?.({ ...output, count: craftCount });
+            this.consumeRecipeCount(game.craftingGrid, crafts);
+            game.onCraft?.({ ...output, count: totalOutput, crafts });
           }
         }
       }
@@ -138,12 +160,19 @@ export class InventoryUI {
       const rect = layout.slots[i];
       if (!rect) continue;
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-        if (mods.shiftKey && layout.hasStorage) {
-          const moved = this.quickTransfer(game.inventory.slots[i], game.storage.getActiveContainer()?.slots ?? []);
-          if (moved) {
-            game.ui.cursorItem = this.cursor;
+        if (mods.shiftKey && button === 0) {
+          if (layout.hasStorage) {
+            const moved = this.quickTransfer(game.inventory.slots[i], game.storage.getActiveContainer()?.slots ?? []);
+            if (moved) {
+              game.ui.cursorItem = this.cursor;
+              return;
+            }
+          } else if (this.openSplitPicker(game, game.inventory.slots[i])) {
             return;
           }
+        }
+        if (mods.shiftKey && button === 2 && this.openSplitPicker(game, game.inventory.slots[i])) {
+          return;
         }
         this.cursor = this.handleSlotClickAdvanced(game.inventory.slots[i], this.cursor, button);
         game.ui.cursorItem = this.cursor;
@@ -168,12 +197,15 @@ export class InventoryUI {
           const rect = layout.storageSlots[i];
           if (!rect) continue;
           if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-            if (mods.shiftKey) {
+            if (mods.shiftKey && button === 0) {
               const moved = this.quickTransfer(storage.slots[i], game.inventory.slots);
               if (moved) {
                 game.ui.cursorItem = this.cursor;
                 return;
               }
+            }
+            if (mods.shiftKey && button === 2 && this.openSplitPicker(game, storage.slots[i])) {
+              return;
             }
             this.cursor = this.handleSlotClickAdvanced(storage.slots[i], this.cursor, button);
             game.ui.cursorItem = this.cursor;
@@ -258,5 +290,78 @@ export class InventoryUI {
       }
     }
     return moved;
+  }
+
+  openSplitPicker(game, slot) {
+    if (this.cursor || !slot?.id || slot.count <= 1) return false;
+    game.ui.splitPicker = {
+      active: true,
+      slot,
+      max: slot.count,
+      amount: Math.max(1, Math.floor(slot.count / 2)),
+    };
+    return true;
+  }
+
+  handleSplitPickerClick(game, x, y) {
+    const layout = game.ui.splitPickerLayout;
+    const picker = game.ui.splitPicker;
+    if (!layout || !picker) {
+      game.ui.splitPicker = null;
+      game.ui.splitPickerLayout = null;
+      return;
+    }
+    const hit = (rect) =>
+      rect && x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+    if (hit(layout.minus)) {
+      picker.amount = Math.max(1, picker.amount - 1);
+      return;
+    }
+    if (hit(layout.plus)) {
+      picker.amount = Math.min(picker.max, picker.amount + 1);
+      return;
+    }
+    if (hit(layout.max)) {
+      picker.amount = picker.max;
+      return;
+    }
+    if (hit(layout.cancel)) {
+      game.ui.splitPicker = null;
+      game.ui.splitPickerLayout = null;
+      return;
+    }
+    if (hit(layout.confirm)) {
+      const id = picker.slot.id;
+      const amount = Math.min(picker.max, Math.max(1, picker.amount));
+      const remaining = picker.slot.count - amount;
+      if (remaining <= 0) {
+        picker.slot.id = null;
+        picker.slot.count = 0;
+      } else {
+        picker.slot.count = remaining;
+      }
+      this.cursor = { id, count: amount };
+      game.ui.cursorItem = this.cursor;
+      game.ui.splitPicker = null;
+      game.ui.splitPickerLayout = null;
+      return;
+    }
+    if (!hit(layout.panel)) {
+      game.ui.splitPicker = null;
+      game.ui.splitPickerLayout = null;
+    }
+  }
+
+  getMaxCrafts(recipe, craftSlots, output, existingCount) {
+    let craftable = Infinity;
+    for (let i = 0; i < recipe.pattern.length; i += 1) {
+      const need = recipe.pattern[i];
+      const slot = craftSlots[i];
+      if (!need || !slot || slot.id !== need) return 0;
+      craftable = Math.min(craftable, slot.count);
+    }
+    const maxStack = ITEMS[output.id]?.maxStack ?? 1;
+    const stackLimit = Math.floor((maxStack - existingCount) / output.count);
+    return Math.max(0, Math.min(craftable, stackLimit));
   }
 }

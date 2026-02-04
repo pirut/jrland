@@ -287,9 +287,12 @@ export class Game {
   }
 
   onCraft(output) {
-    this.awardXp(PROGRESSION.xp.craft);
-    this.notifications.push(`Crafted ${output.id}`);
-    this.quests.onCraft(output.id, output.count);
+    const crafts = output.crafts ?? 1;
+    const totalCount = output.count ?? 1;
+    this.awardXp(PROGRESSION.xp.craft * crafts);
+    const label = totalCount > 1 ? `Crafted ${output.id} x${totalCount}` : `Crafted ${output.id}`;
+    this.notifications.push(label);
+    this.quests.onCraft(output.id, totalCount);
     this.resolveQuestCompletions();
   }
 

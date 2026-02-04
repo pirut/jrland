@@ -18,6 +18,8 @@ export class UIState {
     this.mouseWorldY = 0;
     this.pointerInCanvas = false;
     this.buildCatalogLayout = null;
+    this.splitPicker = null;
+    this.splitPickerLayout = null;
   }
 
   toggleInventory() {

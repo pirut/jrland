@@ -198,3 +198,11 @@ Updates (2026-02-04, inventory UX + build planner):
 
 Test log:
 - Ran Playwright client after build planner updates (latest: shot-1-1770219218532.png, state-1-1770219218532.json).
+
+Updates (2026-02-04, advanced inventory + catalog tooltips):
+- Added split picker panel (shift + right-click stack) to choose exact split amounts before grabbing.
+- Added shift-click craft-all from the output slot; crafting now respects max stack and consumes the correct counts.
+- Added build catalog hover tooltips with size/level/cost details.
+
+Test log:
+- Ran Playwright client after catalog tooltip/split picker changes; screenshots/state captured in output/web-game (latest: shot-1-1770220039716.png, state-1-1770220039716.json).

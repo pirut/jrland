@@ -44,7 +44,7 @@ export class Creature {
     }
   }
 
-  update(dt, player, world, weatherType) {
+  update(dt, player, world, weatherType, onAttack) {
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     const dx = player.x - this.x;
@@ -68,7 +68,7 @@ export class Creature {
 
     let attacked = false;
     if (dist < this.attackRange && this.attackCooldown <= 0) {
-      player.health = clamp(player.health - this.damage, 0, player.maxHealth);
+      if (onAttack) onAttack(this.damage);
       this.attackCooldown = 1.4;
       attacked = true;
     }

@@ -273,7 +273,9 @@ export class Renderer {
       }
       const px = (creature.x - bounds.minX) * tileSize;
       const py = (creature.y - bounds.minY) * tileSize;
-      const bodyColor = creature.hitFlash > 0 ? "rgba(195, 94, 94, 0.9)" : "rgba(48, 54, 52, 0.9)";
+      const baseColor =
+        creature.type === "wolf" ? "rgba(70, 76, 78, 0.9)" : "rgba(48, 54, 52, 0.9)";
+      const bodyColor = creature.hitFlash > 0 ? "rgba(195, 94, 94, 0.9)" : baseColor;
       this.ctx.save();
       this.ctx.fillStyle = "rgba(0,0,0,0.2)";
       this.ctx.beginPath();
@@ -283,7 +285,7 @@ export class Renderer {
       this.ctx.beginPath();
       this.ctx.ellipse(px, py, tileSize * 0.28, tileSize * 0.2, 0.2, 0, Math.PI * 2);
       this.ctx.fill();
-      this.ctx.fillStyle = "rgba(85, 90, 88, 0.9)";
+      this.ctx.fillStyle = creature.type === "wolf" ? "rgba(120, 125, 126, 0.9)" : "rgba(85, 90, 88, 0.9)";
       this.ctx.beginPath();
       this.ctx.arc(px - tileSize * 0.18, py - tileSize * 0.02, tileSize * 0.08, 0, Math.PI * 2);
       this.ctx.arc(px + tileSize * 0.18, py - tileSize * 0.02, tileSize * 0.08, 0, Math.PI * 2);

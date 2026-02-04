@@ -52,6 +52,7 @@ export const ITEMS = {
   berry: { name: "Berries", maxStack: 16, edible: { hunger: 18, stamina: 6 } },
   planks: { name: "Planks", maxStack: 32 },
   meat: { name: "Meat", maxStack: 8, edible: { hunger: 28, stamina: 10, health: 4 } },
+  cooked_meat: { name: "Cooked Meat", maxStack: 8, edible: { hunger: 40, stamina: 14, health: 10 } },
   hide: { name: "Hide", maxStack: 12 },
   campfire: { name: "Campfire", maxStack: 16 },
   shelter: { name: "Shelter", maxStack: 8 },
@@ -60,6 +61,7 @@ export const ITEMS = {
   stone_axe: { name: "Stone Axe", maxStack: 1 },
   stone_pick: { name: "Stone Pick", maxStack: 1 },
   stone_spear: { name: "Stone Spear", maxStack: 1 },
+  hide_armor: { name: "Hide Armor", maxStack: 1 },
   backpack: { name: "Backpack", maxStack: 1 },
 };
 
@@ -80,6 +82,12 @@ export const CRAFTING_RECIPES = [
     pattern: ["wood", "stone", "wood", "stone"],
     output: { id: "stone_spear", count: 1 },
     unlockLevel: 3,
+    requiresStructure: "workbench",
+  },
+  {
+    pattern: ["hide", "planks", "hide", "planks"],
+    output: { id: "hide_armor", count: 1 },
+    unlockLevel: 4,
     requiresStructure: "workbench",
   },
   {
@@ -118,6 +126,18 @@ export const CREATURES = {
     drops: [
       { id: "meat", min: 1, max: 2 },
       { id: "hide", min: 0, max: 1 },
+    ],
+  },
+  wolf: {
+    maxHealth: 22,
+    speed: 2.2,
+    aggroRange: 4.2,
+    attackRange: 0.9,
+    damage: 6,
+    xp: 8,
+    drops: [
+      { id: "meat", min: 1, max: 1 },
+      { id: "hide", min: 1, max: 2 },
     ],
   },
 };

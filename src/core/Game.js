@@ -44,7 +44,7 @@ export class Game {
     this.seedControls = seedControls;
     this.ui = new UIState();
     this.inventoryUI = new InventoryUI();
-    this.gear = { tool: "none", weapon: "none", backpack: false };
+    this.gear = { tool: "none", weapon: "none", armor: "none", backpack: false };
     this.structureContext = {
       nearCampfire: false,
       nearShelter: false,
@@ -77,7 +77,7 @@ export class Game {
     this.inventory.reset();
     this.progression.reset();
     this.quests.reset();
-    this.gear = { tool: "none", weapon: "none", backpack: false };
+    this.gear = { tool: "none", weapon: "none", armor: "none", backpack: false };
     this.build.reset();
     this.creatures.reset();
     this.notifications.items = [];
@@ -196,11 +196,21 @@ export class Game {
     const hasAxe = this.inventory.slots.some((slot) => slot.id === "stone_axe");
     const hasPick = this.inventory.slots.some((slot) => slot.id === "stone_pick");
     const hasSpear = this.inventory.slots.some((slot) => slot.id === "stone_spear");
+    const hasArmor = this.inventory.slots.some((slot) => slot.id === "hide_armor");
     const hasBackpack = this.inventory.slots.some((slot) => slot.id === "backpack");
     this.gear.tool = hasPick ? "stone_pick" : hasAxe ? "stone_axe" : "none";
     this.gear.weapon = hasSpear ? "stone_spear" : "none";
+    this.gear.armor = hasArmor ? "hide_armor" : "none";
     this.gear.backpack = hasBackpack;
     this.inventory.capacityBonus = hasBackpack ? 10 : 0;
+  }
+
+  applyDamage(amount) {
+    let finalDamage = amount;
+    if (this.gear.armor === "hide_armor") {
+      finalDamage = amount * 0.75;
+    }
+    this.player.health = clamp(this.player.health - finalDamage, 0, this.player.maxHealth);
   }
 
   attemptAttack() {
@@ -372,8 +382,19 @@ export class Game {
     if (!found) return false;
     const { structure } = found;
     if (structure.type === "campfire") {
-      this.player.consume({ health: 12, stamina: 18, hunger: 6 });
-      this.notifications.push("Warmed up at the campfire");
+      if (this.inventory.getCount("meat") > 0) {
+        const maxStack = ITEMS.cooked_meat?.maxStack ?? 8;
+        if (this.inventory.canAdd("cooked_meat", 1, maxStack)) {
+          this.inventory.removeItem("meat", 1);
+          this.inventory.addItem("cooked_meat", 1, maxStack);
+          this.notifications.push("Cooked meat");
+        } else {
+          this.notifications.push("Inventory full");
+        }
+      } else {
+        this.player.consume({ health: 12, stamina: 18, hunger: 6 });
+        this.notifications.push("Warmed up at the campfire");
+      }
       return true;
     }
     if (structure.type === "shelter") {
@@ -544,6 +565,7 @@ export class Game {
         berries: this.inventory.getCount("berry"),
         planks: this.inventory.getCount("planks"),
         meat: this.inventory.getCount("meat"),
+        cookedMeat: this.inventory.getCount("cooked_meat"),
         hide: this.inventory.getCount("hide"),
         capacity: this.inventory.capacity(),
         used: this.inventory.count(),

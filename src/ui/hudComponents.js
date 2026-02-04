@@ -238,7 +238,8 @@ export class InventoryReadout {
           ? "Pick"
           : "None";
     const weapon = game.gear.weapon === "stone_spear" ? "Spear" : "None";
-    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Meat ${game.inventory.getCount("meat")}  |  Hide ${game.inventory.getCount("hide")}  |  Carry ${capacity}  |  Tool ${tool}  |  Weapon ${weapon}`;
+    const armor = game.gear.armor === "hide_armor" ? "Hide" : "None";
+    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Meat ${game.inventory.getCount("meat")}  |  Cooked ${game.inventory.getCount("cooked_meat")}  |  Hide ${game.inventory.getCount("hide")}  |  Carry ${capacity}  |  Tool ${tool}  |  Weapon ${weapon}  |  Armor ${armor}`;
     this.ctx.save();
     this.ctx.font = "12px 'Manrope', sans-serif";
     const width = this.ctx.measureText(text).width + 16;
@@ -405,6 +406,7 @@ export class InventoryOverlay {
     this.ctx.fillText(`Planks: ${game.inventory.getCount("planks")}`, statsX + 360, statsY);
     this.ctx.fillText(`Meat: ${game.inventory.getCount("meat")}`, statsX, statsLine2Y);
     this.ctx.fillText(`Hide: ${game.inventory.getCount("hide")}`, statsX + 120, statsLine2Y);
+    this.ctx.fillText(`Cooked: ${game.inventory.getCount("cooked_meat")}`, statsX + 240, statsLine2Y);
     const toolLabel =
       game.gear.tool === "stone_axe"
         ? "Stone Axe"
@@ -412,8 +414,10 @@ export class InventoryOverlay {
           ? "Stone Pick"
           : "None";
     const weaponLabel = game.gear.weapon === "stone_spear" ? "Stone Spear" : "None";
+    const armorLabel = game.gear.armor === "hide_armor" ? "Hide Armor" : "None";
     this.ctx.fillText(`Tool: ${toolLabel}`, statsX, statsLine3Y);
     this.ctx.fillText(`Weapon: ${weaponLabel}`, statsX + 180, statsLine3Y);
+    this.ctx.fillText(`Armor: ${armorLabel}`, statsX + 360, statsLine3Y);
 
     if (game.ui.cursorItem) {
       drawItemIcon(this.ctx, game.ui.cursorItem.id, game.ui.mouseX - 8, game.ui.mouseY - 8, 2);

@@ -97,11 +97,21 @@ export class World {
               y: ty + 0.5,
             });
           }
-          const creatureChance = biome === "woodland" ? 0.02 : 0.012;
+          const creatureChance = biome === "woodland" ? 0.02 : biome === "highland" ? 0.018 : 0.012;
           if (creatureRoll < creatureChance) {
+            const creatureType =
+              biome === "highland"
+                ? creatureRoll < creatureChance * 0.55
+                  ? "wolf"
+                  : "boar"
+                : biome === "coastal"
+                  ? "boar"
+                  : creatureRoll < creatureChance * 0.3
+                    ? "wolf"
+                    : "boar";
             chunk.creatures.push({
               id: `creature:${tx},${ty}`,
-              type: "boar",
+              type: creatureType,
               x: tx + 0.5,
               y: ty + 0.5,
             });

@@ -89,6 +89,16 @@ export const ICONS = {
     "........",
     "........",
   ],
+  hide_armor: [
+    ".bbbbbb.",
+    "bb....bb",
+    "bb....bb",
+    "bbbbbbbb",
+    "bb....bb",
+    "bb....bb",
+    "........",
+    "........",
+  ],
   backpack: [
     "..bbbb..",
     ".b....b.",
@@ -114,6 +124,16 @@ export const ICONS = {
     "..rrr...",
     ".rrrrr..",
     ".rrrrr..",
+    "..rrr...",
+    "........",
+    "........",
+    "........",
+  ],
+  cooked_meat: [
+    "........",
+    "..rrr...",
+    ".rrrrr..",
+    ".rroor..",
     "..rrr...",
     "........",
     "........",
@@ -187,8 +207,16 @@ export const ICON_PALETTES = {
   meat: {
     r: "#c45a4f",
   },
+  cooked_meat: {
+    r: "#c45a4f",
+    o: "#d9a15f",
+  },
   hide: {
     b: "#b08a62",
+  },
+  hide_armor: {
+    b: "#b08a62",
+    s: "#6b5644",
   },
   planks: {
     b: "#a9815a",

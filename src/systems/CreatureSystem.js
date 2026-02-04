@@ -37,7 +37,9 @@ export class CreatureSystem {
     this.ensureCreaturesInView(game, bounds);
     const toRemove = [];
     this.creatures.forEach((creature, id) => {
-      const attacked = creature.update(dt, game.player, game.world, game.weather.type);
+      const attacked = creature.update(dt, game.player, game.world, game.weather.type, (amount) =>
+        game.applyDamage(amount)
+      );
       if (attacked) {
         game.notifications.push(`${creature.type} hit`);
       }

@@ -150,3 +150,12 @@ Updates (2026-02-03, combat + world events + build catalog polish):
 
 Test log:
 - Ran Playwright client after combat/world-event/build-catalog updates; screenshots/state captured in output/web-game (latest: shot-2-1770213914204.png, state-2-1770213914204.json).
+
+Updates (2026-02-03, combat expansion + armor + cooking):
+- Added wolves alongside boars and creature-type visuals.
+- Added stone spear weapon + hide armor; armor reduces incoming damage.
+- Campfires now cook meat into cooked meat when available.
+- Added cooked meat + hide items to inventory UI and text state.
+
+Test log:
+- Ran Playwright client after combat/armor/cooking updates; screenshots/state captured in output/web-game (latest: shot-2-1770214440439.png, state-2-1770214440439.json).

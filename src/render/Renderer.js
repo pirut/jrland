@@ -217,6 +217,45 @@ export class Renderer {
           (base.w * tileSize) / 2,
           (base.h * tileSize) / 2
         );
+      } else if (structure.type === "lean_to") {
+        const base = BUILDINGS.lean_to?.baseSize ?? { w: 0.9, h: 0.4 };
+        this.ctx.fillStyle = "rgba(116, 96, 76, 0.9)";
+        this.ctx.fillRect(
+          centerX - (base.w * tileSize) / 2,
+          centerY - (base.h * tileSize) / 2,
+          base.w * tileSize,
+          base.h * tileSize
+        );
+        this.ctx.fillStyle = "rgba(86, 70, 54, 0.9)";
+        this.ctx.fillRect(
+          centerX - (base.w * tileSize) / 2,
+          centerY - (base.h * tileSize) / 2,
+          base.w * tileSize,
+          (base.h * tileSize) / 3
+        );
+      } else if (structure.type === "storage_crate") {
+        this.ctx.fillStyle = "rgba(132, 103, 74, 0.9)";
+        this.ctx.fillRect(px + tileSize * 0.15, py + tileSize * 0.25, width - tileSize * 0.3, height - tileSize * 0.3);
+        this.ctx.fillStyle = "rgba(96, 74, 52, 0.9)";
+        this.ctx.fillRect(px + tileSize * 0.15, py + tileSize * 0.25, width - tileSize * 0.3, tileSize * 0.12);
+      } else if (structure.type === "wood_wall") {
+        this.ctx.fillStyle = "rgba(104, 78, 54, 0.95)";
+        this.ctx.fillRect(px + tileSize * 0.1, py + tileSize * 0.1, width - tileSize * 0.2, height - tileSize * 0.2);
+        this.ctx.fillStyle = "rgba(86, 64, 44, 0.9)";
+        this.ctx.fillRect(px + tileSize * 0.1, py + tileSize * 0.1, width - tileSize * 0.2, tileSize * 0.12);
+      } else if (structure.type === "wood_gate") {
+        if (structure.open) {
+          this.ctx.fillStyle = "rgba(112, 86, 60, 0.9)";
+          this.ctx.fillRect(px + tileSize * 0.12, py + tileSize * 0.12, tileSize * 0.18, height - tileSize * 0.24);
+          this.ctx.fillRect(px + width - tileSize * 0.3, py + tileSize * 0.12, tileSize * 0.18, height - tileSize * 0.24);
+          this.ctx.strokeStyle = "rgba(68, 52, 38, 0.9)";
+          this.ctx.strokeRect(px + tileSize * 0.1, py + tileSize * 0.12, width - tileSize * 0.2, height - tileSize * 0.24);
+        } else {
+          this.ctx.fillStyle = "rgba(112, 86, 60, 0.95)";
+          this.ctx.fillRect(px + tileSize * 0.1, py + tileSize * 0.1, width - tileSize * 0.2, height - tileSize * 0.2);
+          this.ctx.strokeStyle = "rgba(68, 52, 38, 0.9)";
+          this.ctx.strokeRect(px + tileSize * 0.2, py + tileSize * 0.2, width - tileSize * 0.4, height - tileSize * 0.4);
+        }
       }
     });
   }
@@ -470,13 +509,17 @@ export class Renderer {
     ]
       .filter(Boolean)
       .join(" & ");
+    const phase = game.isNightTime() ? "Night" : "Day";
+    const eventLabel = game.worldEvents?.activeEvent?.label ?? "None";
     return [
       `Seed ${game.seed}`,
       `Time ${formatClock(game.timeOfDay)}`,
+      `Phase ${phase}`,
       `Biome ${biome}`,
       `Band ${band}`,
       `Weather ${game.weather.type}`,
       `Level ${game.progression.level}`,
+      `Event ${eventLabel}`,
       `Near ${nearby || "None"}`,
       `Under ${game.structureContext.underCanopy ? "Canopy" : "Open"}`,
     ];

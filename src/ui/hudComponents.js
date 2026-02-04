@@ -169,6 +169,33 @@ export class BuildBanner {
   }
 }
 
+export class WorldEventPanel {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+
+  draw(game) {
+    if (!game.ui.showHud) return;
+    const event = game.worldEvents?.activeEvent;
+    if (!event) return;
+    const timer = Math.max(0, Math.ceil(game.worldEvents.timer));
+    const detail = event.detail ? ` — ${event.detail}` : "";
+    const text = `${event.label}${detail} (${timer}s)`;
+    this.ctx.save();
+    this.ctx.font = "12px 'Manrope', sans-serif";
+    const width = this.ctx.measureText(text).width + 20;
+    const x = (game.view.width - width) / 2;
+    const y = 58;
+    this.ctx.fillStyle = "rgba(30, 36, 40, 0.7)";
+    this.ctx.fillRect(x, y - 14, width, 20);
+    this.ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    this.ctx.strokeRect(x, y - 14, width, 20);
+    this.ctx.fillStyle = "rgba(255,255,255,0.85)";
+    this.ctx.fillText(text, x + 10, y);
+    this.ctx.restore();
+  }
+}
+
 export class BuildCatalog {
   constructor(ctx) {
     this.ctx = ctx;
@@ -177,25 +204,47 @@ export class BuildCatalog {
   draw(game) {
     if (!game.ui.showBuildCatalog) return;
     if (!game.build.active) return;
-    const entries = Object.entries(BUILDINGS);
+    const categoryOrder = ["utility", "housing", "defense"];
+    const entries = [];
+    categoryOrder.forEach((category) => {
+      const group = Object.entries(BUILDINGS).filter(([, def]) => def.category === category);
+      if (group.length) {
+        entries.push([`__${category}`, { header: true, label: category }]);
+        entries.push(...group);
+      }
+    });
+    if (!entries.length) return;
     const padding = 10;
     const lineHeight = 14;
     const x = game.view.width - 210;
     const y = game.view.height - 220;
     this.ctx.save();
     this.ctx.font = "11px 'Manrope', sans-serif";
-    const lines = entries.map(([id, def], idx) => {
+    let buildIndex = 1;
+    const lines = entries.map(([id, def]) => {
+      if (def.header) {
+        return {
+          id,
+          text: def.label.toUpperCase(),
+          locked: false,
+          selected: false,
+          header: true,
+        };
+      }
       const level = def.unlockLevel ?? 1;
       const locked = game.progression.level < level;
       const cost = Object.entries(def.cost)
         .map(([key, value]) => `${key} ${value}`)
         .join(" ");
-      return {
+      const line = {
         id,
-        text: `${idx + 1}. ${id} (${cost})${locked ? ` L${level}` : ""}`,
+        text: `${buildIndex}. ${id} (${cost})${locked ? ` L${level}` : ""}`,
         locked,
         selected: game.build.selected === id,
+        header: false,
       };
+      buildIndex += 1;
+      return line;
     });
     const header = "Build Catalog (Q rotate)";
     const width =
@@ -212,6 +261,11 @@ export class BuildCatalog {
     this.ctx.fillText(header, x + padding, y + padding);
     lines.forEach((line, index) => {
       const lineY = y + padding + (index + 1) * lineHeight;
+      if (line.header) {
+        this.ctx.fillStyle = "rgba(15,20,23,0.55)";
+        this.ctx.fillText(line.text, x + padding, lineY);
+        return;
+      }
       if (line.selected) {
         this.ctx.fillStyle = "rgba(47,111,79,0.2)";
         this.ctx.fillRect(x + 4, lineY - 10, width - 8, lineHeight);
@@ -231,15 +285,26 @@ export class InventoryReadout {
   draw(game) {
     if (!game.ui.showInventoryReadout) return;
     const capacity = `${game.inventory.count()}/${game.inventory.capacity()}`;
-    const tool =
-      game.gear.tool === "stone_axe"
-        ? "Axe"
-        : game.gear.tool === "stone_pick"
+    const axe =
+      game.gear.axe === "reinforced_axe"
+        ? "Axe+"
+        : game.gear.axe === "stone_axe"
+          ? "Axe"
+          : "None";
+    const pick =
+      game.gear.pick === "reinforced_pick"
+        ? "Pick+"
+        : game.gear.pick === "stone_pick"
           ? "Pick"
           : "None";
-    const weapon = game.gear.weapon === "stone_spear" ? "Spear" : "None";
+    const weapon =
+      game.gear.weapon === "reinforced_spear"
+        ? "Spear+"
+        : game.gear.weapon === "stone_spear"
+          ? "Spear"
+          : "None";
     const armor = game.gear.armor === "hide_armor" ? "Hide" : "None";
-    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Meat ${game.inventory.getCount("meat")}  |  Cooked ${game.inventory.getCount("cooked_meat")}  |  Hide ${game.inventory.getCount("hide")}  |  Carry ${capacity}  |  Tool ${tool}  |  Weapon ${weapon}  |  Armor ${armor}`;
+    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Meat ${game.inventory.getCount("meat")}  |  Cooked ${game.inventory.getCount("cooked_meat")}  |  Hide ${game.inventory.getCount("hide")}  |  Carry ${capacity}  |  Axe ${axe}  |  Pick ${pick}  |  Weapon ${weapon}  |  Armor ${armor}`;
     this.ctx.save();
     this.ctx.font = "12px 'Manrope', sans-serif";
     const width = this.ctx.measureText(text).width + 16;
@@ -407,17 +472,29 @@ export class InventoryOverlay {
     this.ctx.fillText(`Meat: ${game.inventory.getCount("meat")}`, statsX, statsLine2Y);
     this.ctx.fillText(`Hide: ${game.inventory.getCount("hide")}`, statsX + 120, statsLine2Y);
     this.ctx.fillText(`Cooked: ${game.inventory.getCount("cooked_meat")}`, statsX + 240, statsLine2Y);
-    const toolLabel =
-      game.gear.tool === "stone_axe"
-        ? "Stone Axe"
-        : game.gear.tool === "stone_pick"
+    const axeLabel =
+      game.gear.axe === "reinforced_axe"
+        ? "Reinforced Axe"
+        : game.gear.axe === "stone_axe"
+          ? "Stone Axe"
+          : "None";
+    const pickLabel =
+      game.gear.pick === "reinforced_pick"
+        ? "Reinforced Pick"
+        : game.gear.pick === "stone_pick"
           ? "Stone Pick"
           : "None";
-    const weaponLabel = game.gear.weapon === "stone_spear" ? "Stone Spear" : "None";
+    const weaponLabel =
+      game.gear.weapon === "reinforced_spear"
+        ? "Reinforced Spear"
+        : game.gear.weapon === "stone_spear"
+          ? "Stone Spear"
+          : "None";
     const armorLabel = game.gear.armor === "hide_armor" ? "Hide Armor" : "None";
-    this.ctx.fillText(`Tool: ${toolLabel}`, statsX, statsLine3Y);
-    this.ctx.fillText(`Weapon: ${weaponLabel}`, statsX + 180, statsLine3Y);
-    this.ctx.fillText(`Armor: ${armorLabel}`, statsX + 360, statsLine3Y);
+    this.ctx.fillText(`Axe: ${axeLabel}`, statsX, statsLine3Y);
+    this.ctx.fillText(`Pick: ${pickLabel}`, statsX + 160, statsLine3Y);
+    this.ctx.fillText(`Weapon: ${weaponLabel}`, statsX + 320, statsLine3Y);
+    this.ctx.fillText(`Armor: ${armorLabel}`, statsX + 520, statsLine3Y);
 
     if (game.ui.cursorItem) {
       drawItemIcon(this.ctx, game.ui.cursorItem.id, game.ui.mouseX - 8, game.ui.mouseY - 8, 2);

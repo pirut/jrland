@@ -37,8 +37,13 @@ export class CreatureSystem {
     this.ensureCreaturesInView(game, bounds);
     const toRemove = [];
     this.creatures.forEach((creature, id) => {
-      const attacked = creature.update(dt, game.player, game.world, game.weather.type, (amount) =>
-        game.applyDamage(amount)
+      const attacked = creature.update(
+        dt,
+        game.player,
+        game.world,
+        game.weather.type,
+        game.isNightTime(),
+        (amount) => game.applyDamage(amount)
       );
       if (attacked) {
         game.notifications.push(`${creature.type} hit`);
@@ -49,6 +54,14 @@ export class CreatureSystem {
       }
     });
     toRemove.forEach((id) => this.creatures.delete(id));
+  }
+
+  spawnCreature(type, x, y, seed) {
+    const id = `event:${type}:${x.toFixed(2)},${y.toFixed(2)}:${seed}`;
+    if (this.creatures.has(id)) return;
+    const creature = new Creature({ id, type, x, y, seed });
+    creature.spawnChunk = null;
+    this.creatures.set(id, creature);
   }
 
   findNearestInRange(player, range = 1.1) {
@@ -72,7 +85,7 @@ export class CreatureSystem {
     const dist = Math.hypot(dx, dy) || 1;
     const dot = (dx / dist) * (game.player.facingX || 0) + (dy / dist) * (game.player.facingY || 1);
     if (dot < -0.15) return false;
-    const damage = weapon === "stone_spear" ? 14 : 8;
+    const damage = weapon === "reinforced_spear" ? 20 : weapon === "stone_spear" ? 14 : 8;
     target.takeDamage(damage);
     game.notifications.push("Hit!");
     return true;
@@ -100,6 +113,7 @@ export class CreatureSystem {
         game.quests.onGather(drop.id, count);
       }
     });
+    game.quests.onDefeat(creature.type);
     game.resolveQuestCompletions();
   }
 }

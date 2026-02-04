@@ -70,8 +70,8 @@ export class BuildSystem {
       valid = false;
       reason = "Space occupied";
     }
-    const spacing = blueprint.footprintRadius ?? 0.7;
-    if (valid && world.isStructureNearRadius(centerX, centerY, spacing)) {
+    const spacing = blueprint.spacing ?? blueprint.footprintRadius ?? 0.7;
+    if (valid && spacing > 0 && world.isStructureNearRadius(centerX, centerY, spacing)) {
       valid = false;
       reason = "Too close to another structure";
     }

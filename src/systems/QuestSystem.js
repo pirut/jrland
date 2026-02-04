@@ -49,4 +49,16 @@ export class QuestSystem {
       .filter((quest) => quest.type === "build" && quest.item === structureId)
       .map((quest) => this.updateQuestProgress(quest, 1));
   }
+
+  onCook(itemId, amount = 1) {
+    return this.quests
+      .filter((quest) => quest.type === "cook" && quest.item === itemId)
+      .map((quest) => this.updateQuestProgress(quest, amount));
+  }
+
+  onDefeat(creatureType, amount = 1) {
+    return this.quests
+      .filter((quest) => quest.type === "defeat" && quest.item === creatureType)
+      .map((quest) => this.updateQuestProgress(quest, amount));
+  }
 }

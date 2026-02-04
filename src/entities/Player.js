@@ -83,10 +83,16 @@ export class Player {
     const nextX = this.x + this.vx * dt;
     const nextY = this.y + this.vy * dt;
 
-    if (world.tileType(Math.floor(nextX), Math.floor(this.y)) !== "water") {
+    if (
+      world.tileType(Math.floor(nextX), Math.floor(this.y)) !== "water" &&
+      !world.isPositionBlocked(nextX, this.y)
+    ) {
       this.x = nextX;
     }
-    if (world.tileType(Math.floor(this.x), Math.floor(nextY)) !== "water") {
+    if (
+      world.tileType(Math.floor(this.x), Math.floor(nextY)) !== "water" &&
+      !world.isPositionBlocked(this.x, nextY)
+    ) {
       this.y = nextY;
     }
   }

@@ -159,3 +159,21 @@ Updates (2026-02-03, combat expansion + armor + cooking):
 
 Test log:
 - Ran Playwright client after combat/armor/cooking updates; screenshots/state captured in output/web-game (latest: shot-2-1770214440439.png, state-2-1770214440439.json).
+
+Updates (2026-02-04, night events + building depth):
+- Added WorldEventSystem that triggers a Night Hunt event at nightfall and spawns nearby creatures.
+- Added night/day tracking with notifications, debug HUD phase, and world-event HUD banner.
+- Creatures now gain night aggro/speed multipliers (per-creature config).
+- Added lean-to structure (cheap shelter canopy) and storage crates that boost capacity when nearby.
+- Added wood gate toggle (E) with open/closed collision and visuals.
+- Added new quests (lean-to, cooking, armor, storage crate, defeat wolf) and cook XP reward.
+- Structure canopy checks now use roof bounds for accurate under-canopy transparency.
+- render_game_to_text now reports night flag, world events, and gate open state.
+
+Test log:
+- Ran Playwright client after night-event/building updates; screenshots/state captured in output/web-game (latest: shot-2-1770216987800.png, state-2-1770216987800.json).
+
+TODOs (next agent):
+- Add explicit UI/controls for selecting new builds (lean-to, storage crate, walls/gate) beyond hotbar slots.
+- Add a simple storage UI for storage crates (separate container inventory) instead of capacity boost.
+- Add ambient night visuals (campfire glow radius, subtle tint) tied to world events.

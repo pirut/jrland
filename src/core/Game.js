@@ -9,6 +9,7 @@ import { ChatSystem } from "../systems/ChatSystem.js";
 import { Progression } from "../systems/Progression.js";
 import { QuestSystem } from "../systems/QuestSystem.js";
 import { CreatureSystem } from "../systems/CreatureSystem.js";
+import { WorldEventSystem } from "../systems/WorldEventSystem.js";
 import { Renderer } from "../render/Renderer.js";
 import { HudRenderer } from "../render/HudRenderer.js";
 import { InputController } from "../core/InputController.js";
@@ -38,23 +39,28 @@ export class Game {
     this.progression = new Progression();
     this.quests = new QuestSystem();
     this.creatures = new CreatureSystem(this.world);
+    this.worldEvents = new WorldEventSystem();
     this.input = new InputController();
     this.renderer = new Renderer(ctx);
     this.hudRenderer = new HudRenderer(ctx);
     this.seedControls = seedControls;
     this.ui = new UIState();
     this.inventoryUI = new InventoryUI();
-    this.gear = { tool: "none", weapon: "none", armor: "none", backpack: false };
+    this.gear = { axe: "none", pick: "none", weapon: "none", armor: "none", backpack: false };
     this.structureContext = {
       nearCampfire: false,
       nearShelter: false,
       nearWorkbench: false,
+      nearStorage: false,
       underCanopy: false,
       stormDrain: 1,
+      storageBonus: 0,
     };
     this.interaction = { target: null, inRange: false, dist: null };
     this.timeOfDay = 0.25;
     this.externalTime = false;
+    this.isNight = this.isNightTime();
+    this.isNight = false;
     this.debug = { enabled: true };
     this.lastUpdate = performance.now();
     this.overlays = overlays;
@@ -77,9 +83,10 @@ export class Game {
     this.inventory.reset();
     this.progression.reset();
     this.quests.reset();
-    this.gear = { tool: "none", weapon: "none", armor: "none", backpack: false };
+    this.gear = { axe: "none", pick: "none", weapon: "none", armor: "none", backpack: false };
     this.build.reset();
     this.creatures.reset();
+    this.worldEvents.reset();
     this.notifications.items = [];
     this.chat.messages = [];
     this.chat.input = "";
@@ -95,8 +102,10 @@ export class Game {
       nearCampfire: false,
       nearShelter: false,
       nearWorkbench: false,
+      nearStorage: false,
       underCanopy: false,
       stormDrain: 1,
+      storageBonus: 0,
     };
     const spawn = this.world.findSpawn();
     this.player.reset(spawn);
@@ -146,6 +155,16 @@ export class Game {
     this.ensureBlueprints();
   }
 
+  updateCapacityBonus() {
+    const backpackBonus = this.gear.backpack ? 10 : 0;
+    const storageBonus = this.structureContext.storageBonus ?? 0;
+    this.inventory.capacityBonus = backpackBonus + storageBonus;
+  }
+
+  isNightTime() {
+    return this.timeOfDay < 0.18 || this.timeOfDay > 0.82;
+  }
+
   awardXp(amount) {
     if (!Number.isFinite(amount) || amount <= 0) return;
     const leveled = this.progression.addXp(amount);
@@ -193,16 +212,20 @@ export class Game {
   }
 
   refreshEquipmentFromInventory() {
-    const hasAxe = this.inventory.slots.some((slot) => slot.id === "stone_axe");
-    const hasPick = this.inventory.slots.some((slot) => slot.id === "stone_pick");
-    const hasSpear = this.inventory.slots.some((slot) => slot.id === "stone_spear");
+    const hasStoneAxe = this.inventory.slots.some((slot) => slot.id === "stone_axe");
+    const hasReinforcedAxe = this.inventory.slots.some((slot) => slot.id === "reinforced_axe");
+    const hasStonePick = this.inventory.slots.some((slot) => slot.id === "stone_pick");
+    const hasReinforcedPick = this.inventory.slots.some((slot) => slot.id === "reinforced_pick");
+    const hasStoneSpear = this.inventory.slots.some((slot) => slot.id === "stone_spear");
+    const hasReinforcedSpear = this.inventory.slots.some((slot) => slot.id === "reinforced_spear");
     const hasArmor = this.inventory.slots.some((slot) => slot.id === "hide_armor");
     const hasBackpack = this.inventory.slots.some((slot) => slot.id === "backpack");
-    this.gear.tool = hasPick ? "stone_pick" : hasAxe ? "stone_axe" : "none";
-    this.gear.weapon = hasSpear ? "stone_spear" : "none";
+    this.gear.axe = hasReinforcedAxe ? "reinforced_axe" : hasStoneAxe ? "stone_axe" : "none";
+    this.gear.pick = hasReinforcedPick ? "reinforced_pick" : hasStonePick ? "stone_pick" : "none";
+    this.gear.weapon = hasReinforcedSpear ? "reinforced_spear" : hasStoneSpear ? "stone_spear" : "none";
     this.gear.armor = hasArmor ? "hide_armor" : "none";
     this.gear.backpack = hasBackpack;
-    this.inventory.capacityBonus = hasBackpack ? 10 : 0;
+    this.updateCapacityBonus();
   }
 
   applyDamage(amount) {
@@ -302,23 +325,23 @@ export class Game {
     let nearCampfire = false;
     let nearShelter = false;
     let nearWorkbench = false;
+    let nearStorage = 0;
     let underCanopy = false;
     structures.forEach((structure) => {
       const dist = Math.hypot(structure.x - this.player.x, structure.y - this.player.y);
       if (structure.type === "campfire" && dist < 1.6) nearCampfire = true;
       if (structure.type === "shelter" && dist < 1.9) nearShelter = true;
+      if (structure.type === "lean_to" && dist < 1.8) nearShelter = true;
       if (structure.type === "workbench" && dist < 1.6) nearWorkbench = true;
+      if (structure.type === "storage_crate" && dist < 1.7) nearStorage += 1;
       const def = BUILDINGS[structure.type];
-      if (def?.canopy) {
-        const minX = structure.originX ?? structure.x - 0.5;
-        const minY = structure.originY ?? structure.y - 0.5;
-        const w = structure.w ?? 1;
-        const h = structure.h ?? 1;
+      if (def?.canopy || def?.roof) {
+        const roof = def?.roof ?? { w: structure.w ?? 1, h: structure.h ?? 1, offsetY: 0 };
+        const roofCenterX = structure.x;
+        const roofCenterY = structure.y + (roof.offsetY ?? 0);
         if (
-          this.player.x >= minX &&
-          this.player.x <= minX + w &&
-          this.player.y >= minY &&
-          this.player.y <= minY + h
+          Math.abs(this.player.x - roofCenterX) <= (roof.w ?? structure.w ?? 1) / 2 &&
+          Math.abs(this.player.y - roofCenterY) <= (roof.h ?? structure.h ?? 1) / 2
         ) {
           underCanopy = true;
         }
@@ -327,8 +350,11 @@ export class Game {
     this.structureContext.nearCampfire = nearCampfire;
     this.structureContext.nearShelter = nearShelter;
     this.structureContext.nearWorkbench = nearWorkbench;
+    this.structureContext.nearStorage = nearStorage > 0;
     this.structureContext.underCanopy = underCanopy;
     this.structureContext.stormDrain = this.weather.type === "storm" ? 1.35 : 1;
+    this.structureContext.storageBonus = Math.min(18, nearStorage * 6);
+    this.updateCapacityBonus();
   }
 
   attemptGather() {
@@ -342,8 +368,14 @@ export class Game {
       return;
     }
     let baseYield = 1;
-    if (found.entity.type === "tree" && this.gear.tool === "stone_axe") baseYield = 2;
-    if (found.entity.type === "boulder" && this.gear.tool === "stone_pick") baseYield = 2;
+    if (found.entity.type === "tree") {
+      if (this.gear.axe === "reinforced_axe") baseYield = 3;
+      if (this.gear.axe === "stone_axe") baseYield = Math.max(baseYield, 2);
+    }
+    if (found.entity.type === "boulder") {
+      if (this.gear.pick === "reinforced_pick") baseYield = 3;
+      if (this.gear.pick === "stone_pick") baseYield = Math.max(baseYield, 2);
+    }
     const itemId =
       found.entity.type === "tree"
         ? "wood"
@@ -388,6 +420,9 @@ export class Game {
           this.inventory.removeItem("meat", 1);
           this.inventory.addItem("cooked_meat", 1, maxStack);
           this.notifications.push("Cooked meat");
+          this.awardXp(PROGRESSION.xp.cook);
+          this.quests.onCook("cooked_meat", 1);
+          this.resolveQuestCompletions();
         } else {
           this.notifications.push("Inventory full");
         }
@@ -402,10 +437,26 @@ export class Game {
       this.notifications.push("Rested in the shelter");
       return true;
     }
+    if (structure.type === "lean_to") {
+      this.player.consume({ stamina: 18, hunger: 2 });
+      this.notifications.push("Rested under the lean-to");
+      return true;
+    }
     if (structure.type === "workbench") {
       this.ui.inventoryOpen = true;
       this.mode = "inventory";
       this.notifications.push("Workbench ready");
+      return true;
+    }
+    if (structure.type === "storage_crate") {
+      this.ui.inventoryOpen = true;
+      this.mode = "inventory";
+      this.notifications.push("Storage ready");
+      return true;
+    }
+    if (structure.type === "wood_gate") {
+      structure.open = !structure.open;
+      this.notifications.push(structure.open ? "Gate opened" : "Gate closed");
       return true;
     }
     if (structure.type === "hut") {
@@ -473,7 +524,13 @@ export class Game {
     this.build.updatePreview(this.player, this.world, blueprint, unlocked, requiredLevel);
     this.weather.update(dt);
     this.notifications.update(dt);
+    const wasNight = this.isNight;
     this.timeOfDay = (this.timeOfDay + dt / 240) % 1;
+    this.isNight = this.isNightTime();
+    if (wasNight !== this.isNight) {
+      this.notifications.push(this.isNight ? "Night falls" : "Daybreak");
+    }
+    this.worldEvents.update(this, dt);
     if (this.input.wasPressed("e")) this.attemptBuild();
     if (this.input.wasPressed(" ") || this.input.wasPressed("space")) this.attemptAttack();
     if (this.input.wasPressed("r")) this.useActiveItem();
@@ -540,12 +597,21 @@ export class Game {
       seed: this.seed,
       coord: "Origin (0,0) near initial spawn. +x east, +y south. Units = tiles.",
       timeOfDay: Number(this.timeOfDay.toFixed(3)),
+      isNight: this.isNight,
       biome,
       biomeBand: biomeBandName,
       weather: {
         type: this.weather.type,
         timeLeft: Number(this.weather.timer.toFixed(1)),
       },
+      worldEvent: this.worldEvents?.activeEvent
+        ? {
+            id: this.worldEvents.activeEvent.id,
+            label: this.worldEvents.activeEvent.label,
+            detail: this.worldEvents.activeEvent.detail ?? "",
+            timeLeft: Number(this.worldEvents.timer.toFixed(1)),
+          }
+        : null,
       player: {
         x: Number(this.player.x.toFixed(2)),
         y: Number(this.player.y.toFixed(2)),
@@ -605,6 +671,7 @@ export class Game {
         w: structure.w ?? 1,
         h: structure.h ?? 1,
         rotation: structure.rotation ?? 0,
+        open: Boolean(structure.open),
       })),
       interaction: this.interaction.target
         ? {

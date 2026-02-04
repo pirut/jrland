@@ -1,4 +1,5 @@
 import { Random } from "../core/Random.js";
+import { BUILDINGS } from "../config.js";
 
 export class World {
   constructor(seed) {
@@ -176,6 +177,7 @@ export class World {
     const list = this.getStructureChunk(cx, cy);
     const centerX = originX + w / 2;
     const centerY = originY + h / 2;
+    const def = BUILDINGS[type];
     list.push({
       id: `${type}:${originX.toFixed(2)},${originY.toFixed(2)}`,
       type,
@@ -186,6 +188,7 @@ export class World {
       w,
       h,
       rotation,
+      open: def?.toggleable ? false : undefined,
     });
   }
 
@@ -269,6 +272,20 @@ export class World {
         originY < sMinY + sH &&
         originY + h > sMinY
       );
+    });
+  }
+
+  isPositionBlocked(x, y) {
+    const structures = this.getStructuresInView(x - 1, y - 1, x + 1, y + 1);
+    return structures.some((structure) => {
+      const def = BUILDINGS[structure.type];
+      if (!def?.solid) return false;
+      if (structure.type === "wood_gate" && structure.open) return false;
+      const minX = structure.originX ?? structure.x - 0.5;
+      const minY = structure.originY ?? structure.y - 0.5;
+      const w = structure.w ?? 1;
+      const h = structure.h ?? 1;
+      return x >= minX && x <= minX + w && y >= minY && y <= minY + h;
     });
   }
 

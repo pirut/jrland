@@ -44,14 +44,16 @@ export class Creature {
     }
   }
 
-  update(dt, player, world, weatherType, onAttack) {
+  update(dt, player, world, weatherType, isNight, onAttack) {
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const dist = Math.hypot(dx, dy);
-    const inAggro = dist < this.aggroRange;
-    const speedMod = weatherType === "storm" ? 0.85 : 1;
+    const nightAggro = isNight ? this.def?.nightAggroMultiplier ?? 1.25 : 1;
+    const nightSpeed = isNight ? this.def?.nightSpeedMultiplier ?? 1.2 : 1;
+    const inAggro = dist < this.aggroRange * nightAggro;
+    const speedMod = (weatherType === "storm" ? 0.85 : 1) * nightSpeed;
 
     if (inAggro) {
       this.state = "chase";
@@ -63,7 +65,12 @@ export class Creature {
     } else {
       this.state = "wander";
       this.updateWander(dt);
-      this.tryMove(this.wanderDir.x * this.speed * 0.4, this.wanderDir.y * this.speed * 0.4, dt, world);
+      this.tryMove(
+        this.wanderDir.x * this.speed * 0.4 * nightSpeed,
+        this.wanderDir.y * this.speed * 0.4 * nightSpeed,
+        dt,
+        world
+      );
     }
 
     let attacked = false;
@@ -78,10 +85,16 @@ export class Creature {
   tryMove(vx, vy, dt, world) {
     const nextX = this.x + vx * dt;
     const nextY = this.y + vy * dt;
-    if (world.tileType(Math.floor(nextX), Math.floor(this.y)) !== "water") {
+    if (
+      world.tileType(Math.floor(nextX), Math.floor(this.y)) !== "water" &&
+      !world.isPositionBlocked(nextX, this.y)
+    ) {
       this.x = nextX;
     }
-    if (world.tileType(Math.floor(this.x), Math.floor(nextY)) !== "water") {
+    if (
+      world.tileType(Math.floor(this.x), Math.floor(nextY)) !== "water" &&
+      !world.isPositionBlocked(this.x, nextY)
+    ) {
       this.y = nextY;
     }
   }

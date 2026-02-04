@@ -217,3 +217,18 @@ Test log:
 - Ran Playwright client after HUD polish pass (latest: shot-2-1770223591414.png, state-2-1770223591414.json).
 - Ran build-mode capture to confirm layout spacing (latest: shot-1-1770223652945.png, state-1-1770223652945.json).
 - Ran inventory overlay capture (latest: shot-1-1770223718628.png, state-1-1770223718628.json).
+
+Updates (2026-02-04, animal needs + emergent AI):
+- Added AnimalNeeds + CreatureMind modules to model hunger/thirst/energy and emergent decision-making.
+- Creatures now seek water edges, graze or forage berry bushes, and predators can hunt prey.
+- Added pack confidence/bravery modifiers, flee/return/rest behaviors, and starvation health drain.
+- Wolves are nocturnal carnivores and may hunt boars; boars flee predators and the player.
+- Creatures now show a small mood marker above them (e.g., hunt, drink, graze).
+- render_game_to_text now includes creature needs + state for debugging.
+
+Test log:
+- Ran Playwright client after animal AI changes (latest: shot-1-1770226551102.png, state-1-1770226551102.json).
+
+TODOs (next agent):
+- Add explicit animal resting spots (nests/den markers) for stronger territory behavior.
+- Consider resource regrowth so herbivores don't exhaust berries permanently.

@@ -219,7 +219,7 @@ export class World {
     return chunk.entities.some((entity) => entity.id === id && !chunk.removed.has(entity.id));
   }
 
-  findNearestResource(x, y, range) {
+  findNearestResource(x, y, range, filterFn = null) {
     const minX = x - range;
     const maxX = x + range;
     const minY = y - range;
@@ -230,11 +230,40 @@ export class World {
     for (const chunk of chunks) {
       for (const entity of chunk.entities) {
         if (chunk.removed.has(entity.id)) continue;
+        if (filterFn && !filterFn(entity)) continue;
         const dx = entity.x - x;
         const dy = entity.y - y;
         const dist = Math.hypot(dx, dy);
         if (dist <= range && dist < closestDist) {
           closest = { chunk, entity, dist };
+          closestDist = dist;
+        }
+      }
+    }
+    return closest;
+  }
+
+  findNearestWaterEdge(x, y, range) {
+    const minX = Math.floor(x - range);
+    const maxX = Math.ceil(x + range);
+    const minY = Math.floor(y - range);
+    const maxY = Math.ceil(y + range);
+    let closest = null;
+    let closestDist = Infinity;
+    for (let ty = minY; ty <= maxY; ty += 1) {
+      for (let tx = minX; tx <= maxX; tx += 1) {
+        if (this.tileType(tx, ty) === "water") continue;
+        const hasWater =
+          this.tileType(tx + 1, ty) === "water" ||
+          this.tileType(tx - 1, ty) === "water" ||
+          this.tileType(tx, ty + 1) === "water" ||
+          this.tileType(tx, ty - 1) === "water";
+        if (!hasWater) continue;
+        const centerX = tx + 0.5;
+        const centerY = ty + 0.5;
+        const dist = Math.hypot(centerX - x, centerY - y);
+        if (dist <= range && dist < closestDist) {
+          closest = { x: centerX, y: centerY, dist };
           closestDist = dist;
         }
       }

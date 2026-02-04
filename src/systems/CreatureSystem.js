@@ -35,21 +35,25 @@ export class CreatureSystem {
 
   update(game, dt, bounds) {
     this.ensureCreaturesInView(game, bounds);
-    const toRemove = [];
-    this.creatures.forEach((creature, id) => {
-      const attacked = creature.update(
+    const creatureList = Array.from(this.creatures.values());
+    creatureList.forEach((creature) => {
+      const result = creature.update(
         dt,
         game.player,
         game.world,
         game.weather.type,
         game.isNightTime(),
+        creatureList,
         (amount) => game.applyDamage(amount)
       );
-      if (attacked) {
+      if (result.attackedPlayer) {
         game.notifications.push(`${creature.type} hit`);
       }
+    });
+    const toRemove = [];
+    creatureList.forEach((creature) => {
       if (creature.health <= 0) {
-        toRemove.push(id);
+        toRemove.push(creature.id);
         this.handleDeath(game, creature);
       }
     });
@@ -107,6 +111,14 @@ export class CreatureSystem {
   handleDeath(game, creature) {
     const def = CREATURES[creature.type];
     if (!def) return;
+    this.creatures.forEach((other) => {
+      if (other === creature) return;
+      if (other.def?.diet !== "carnivore") return;
+      const dist = Math.hypot(other.x - creature.x, other.y - creature.y);
+      if (dist <= 2.4) {
+        other.needs?.feed(other.def?.meatGain ?? 28);
+      }
+    });
     if (creature.spawnChunk) {
       creature.spawnChunk.removedCreatures.add(creature.id);
     }

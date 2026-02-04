@@ -716,6 +716,10 @@ export class Game {
         x: Number(creature.x.toFixed(2)),
         y: Number(creature.y.toFixed(2)),
         health: Number(creature.health.toFixed(1)),
+        state: creature.state,
+        hunger: Number(creature.needs?.hunger?.toFixed?.(1) ?? 0),
+        thirst: Number(creature.needs?.thirst?.toFixed?.(1) ?? 0),
+        energy: Number(creature.needs?.energy?.toFixed?.(1) ?? 0),
       })),
       structures: structures.slice(0, 40).map((structure) => ({
         type: structure.type,

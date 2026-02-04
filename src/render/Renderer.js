@@ -330,6 +330,23 @@ export class Renderer {
       this.ctx.arc(px + tileSize * 0.18, py - tileSize * 0.02, tileSize * 0.08, 0, Math.PI * 2);
       this.ctx.fill();
 
+      const moodColors = {
+        eat: "rgba(108, 168, 112, 0.9)",
+        drink: "rgba(96, 148, 168, 0.9)",
+        rest: "rgba(140, 140, 140, 0.8)",
+        graze: "rgba(118, 174, 118, 0.8)",
+        hunt: "rgba(176, 90, 70, 0.9)",
+        chase: "rgba(184, 86, 72, 0.9)",
+        flee: "rgba(186, 138, 72, 0.9)",
+      };
+      const mood = moodColors[creature.state];
+      if (mood) {
+        this.ctx.fillStyle = mood;
+        this.ctx.beginPath();
+        this.ctx.arc(px, py - tileSize * 0.32, tileSize * 0.08, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+
       if (creature.health < creature.maxHealth) {
         const ratio = creature.health / creature.maxHealth;
         const barWidth = tileSize * 0.6;

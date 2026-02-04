@@ -1,6 +1,7 @@
 import { CREATURES, ITEMS, PROGRESSION } from "../config.js";
 import { Creature } from "../entities/Creature.js";
 import { TrailSystem } from "./TrailSystem.js";
+import { CarcassSystem } from "./CarcassSystem.js";
 import { Random } from "../core/Random.js";
 
 export class CreatureSystem {
@@ -8,11 +9,13 @@ export class CreatureSystem {
     this.world = world;
     this.creatures = new Map();
     this.trails = new TrailSystem();
+    this.carcasses = new CarcassSystem();
   }
 
   reset() {
     this.creatures.clear();
     this.trails.reset();
+    this.carcasses.reset();
   }
 
   getActiveCreatures() {
@@ -21,6 +24,10 @@ export class CreatureSystem {
 
   getTrailsInView(bounds) {
     return this.trails.getTrailsInView(bounds);
+  }
+
+  getCarcassesInView(bounds) {
+    return this.carcasses.getInView(bounds);
   }
 
   ensureCreaturesInView(game, bounds) {
@@ -42,6 +49,7 @@ export class CreatureSystem {
         creature.homeX = den.x;
         creature.homeY = den.y;
         creature.den = den;
+        creature.packId = den.packId;
       }
       creature.spawnChunk = spawn.chunk;
       this.creatures.set(spawn.id, creature);
@@ -60,14 +68,20 @@ export class CreatureSystem {
         game.isNightTime(),
         creatureList,
         this.trails,
+        this.carcasses,
+        game.season?.modifiers?.() ?? { drought: false, heat: 1, cold: 1 },
         (amount) => game.applyDamage(amount)
       );
       if (result.attackedPlayer) {
         game.notifications.push(`${creature.type} hit`);
       }
+      if (creature.movedDistance > 0.01) {
+        game.world.addFootTraffic(creature.x, creature.y, creature.movedDistance * 0.8);
+      }
     });
     this.trails.record(creatureList);
     this.trails.update(dt);
+    this.carcasses.update(dt);
     const toRemove = [];
     creatureList.forEach((creature) => {
       if (creature.health <= 0) {
@@ -82,6 +96,15 @@ export class CreatureSystem {
     const id = `event:${type}:${x.toFixed(2)},${y.toFixed(2)}:${seed}`;
     if (this.creatures.has(id)) return;
     const creature = new Creature({ id, type, x, y, seed });
+    const den = creature.def?.denType
+      ? this.world.findNearestDen(creature.x, creature.y, creature.def.denSearchRange ?? 8, creature.def.denType)
+      : null;
+    if (den) {
+      creature.homeX = den.x;
+      creature.homeY = den.y;
+      creature.den = den;
+      creature.packId = den.packId;
+    }
     creature.spawnChunk = null;
     this.creatures.set(id, creature);
   }
@@ -129,6 +152,13 @@ export class CreatureSystem {
   handleDeath(game, creature) {
     const def = CREATURES[creature.type];
     if (!def) return;
+    this.carcasses.addCarcass({
+      x: creature.x,
+      y: creature.y,
+      sourceType: creature.type,
+      nutrition: def.carcassNutrition ?? def.meatGain ?? 40,
+      ttl: def.carcassTtl ?? 90,
+    });
     this.creatures.forEach((other) => {
       if (other === creature) return;
       if (other.def?.diet !== "carnivore") return;

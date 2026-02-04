@@ -19,12 +19,26 @@ export class AnimalNeeds {
     this.energy = this.maxEnergy * clamp(energyStart + jitter(), 0.3, 1);
   }
 
-  tick(dt, { moving = false, stressed = false, nocturnal = false, isNight = false } = {}) {
+  tick(
+    dt,
+    { moving = false, stressed = false, nocturnal = false, isNight = false, drought = false, heat = 1, cold = 1 } = {}
+  ) {
     const moveMod = moving ? 1.18 : 1;
     const stressMod = stressed ? 1.25 : 1;
     const nightMod = isNight && !nocturnal ? 1.08 : 1;
-    this.hunger = clamp(this.hunger - dt * this.hungerDrain * moveMod * stressMod * nightMod, 0, this.maxHunger);
-    this.thirst = clamp(this.thirst - dt * this.thirstDrain * moveMod * stressMod * nightMod, 0, this.maxThirst);
+    const droughtMod = drought ? 1.35 : 1;
+    const heatMod = heat ?? 1;
+    const coldMod = cold ?? 1;
+    this.hunger = clamp(
+      this.hunger - dt * this.hungerDrain * moveMod * stressMod * nightMod * coldMod,
+      0,
+      this.maxHunger
+    );
+    this.thirst = clamp(
+      this.thirst - dt * this.thirstDrain * moveMod * stressMod * nightMod * droughtMod * heatMod,
+      0,
+      this.maxThirst
+    );
     if (moving) {
       this.energy = clamp(this.energy - dt * this.energyDrain * stressMod, 0, this.maxEnergy);
     } else {

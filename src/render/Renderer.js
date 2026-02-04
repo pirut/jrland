@@ -59,6 +59,22 @@ export class Renderer {
           tileSize + 0.5,
           tileSize + 0.5
         );
+        const wear = game.world.getPathWear(tx, ty);
+        const threshold = CONFIG.paths?.wearThreshold ?? 8;
+        const maxWear = CONFIG.paths?.maxWear ?? 20;
+        if (wear > threshold && (type === "grass" || type === "dirt" || type === "sand")) {
+          const ratio = clamp((wear - threshold) / Math.max(1, maxWear - threshold), 0, 1);
+          const baseAlpha = type === "sand" ? 0.08 : 0.14;
+          const alpha = baseAlpha + ratio * 0.25;
+          const color = type === "sand" ? "rgba(160, 150, 132," : "rgba(122, 112, 98,";
+          this.ctx.fillStyle = `${color}${alpha})`;
+          this.ctx.fillRect(
+            (tx - bounds.minX) * tileSize,
+            (ty - bounds.minY) * tileSize,
+            tileSize + 0.5,
+            tileSize + 0.5
+          );
+        }
         if (type === "water") {
           const shimmer =
             0.04 +
@@ -339,6 +355,25 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  drawCarcasses(game, tileSize, bounds) {
+    const carcasses = game.creatures?.getCarcassesInView?.(bounds) ?? [];
+    if (!carcasses.length) return;
+    this.ctx.save();
+    carcasses.forEach((carcass) => {
+      const px = (carcass.x - bounds.minX) * tileSize;
+      const py = (carcass.y - bounds.minY) * tileSize;
+      const ratio = carcass.nutrition / carcass.maxNutrition;
+      const alpha = 0.25 + ratio * 0.45;
+      this.ctx.fillStyle = `rgba(92, 70, 58, ${alpha})`;
+      this.ctx.beginPath();
+      this.ctx.ellipse(px, py + tileSize * 0.08, tileSize * 0.28, tileSize * 0.18, 0.2, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.fillStyle = `rgba(64, 52, 44, ${alpha})`;
+      this.ctx.fillRect(px - tileSize * 0.12, py - tileSize * 0.02, tileSize * 0.24, tileSize * 0.08);
+    });
+    this.ctx.restore();
+  }
+
   drawCreatures(game, tileSize, bounds) {
     const creatures = game.creatures?.getActiveCreatures?.() ?? [];
     creatures.forEach((creature) => {
@@ -378,6 +413,7 @@ export class Renderer {
         track: "rgba(96, 130, 126, 0.85)",
         hunt: "rgba(176, 90, 70, 0.9)",
         chase: "rgba(184, 86, 72, 0.9)",
+        defend: "rgba(168, 84, 64, 0.9)",
         flee: "rgba(186, 138, 72, 0.9)",
       };
       const mood = moodColors[creature.state];
@@ -579,6 +615,7 @@ export class Renderer {
     this.drawStructuresBase(game, tileSize, bounds);
     this.drawTrails(game, tileSize, bounds);
     this.drawDens(game, tileSize, bounds);
+    this.drawCarcasses(game, tileSize, bounds);
     this.drawCreatures(game, tileSize, bounds);
     this.drawBuildPreview(game, tileSize, bounds);
     this.drawMoveTarget(game, tileSize, bounds);
@@ -602,6 +639,8 @@ export class Renderer {
       .join(" & ");
     const phase = game.isNightTime() ? "Night" : "Day";
     const eventLabel = game.worldEvents?.activeEvent?.label ?? "None";
+    const season = game.season?.name ?? "unknown";
+    const drought = game.season?.drought ? "Yes" : "No";
     return [
       `Seed ${game.seed}`,
       `Time ${formatClock(game.timeOfDay)}`,
@@ -609,6 +648,8 @@ export class Renderer {
       `Biome ${biome}`,
       `Band ${band}`,
       `Weather ${game.weather.type}`,
+      `Season ${season}`,
+      `Drought ${drought}`,
       `Level ${game.progression.level}`,
       `Event ${eventLabel}`,
       `Near ${nearby || "None"}`,

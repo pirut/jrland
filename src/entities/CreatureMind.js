@@ -9,7 +9,7 @@ export class CreatureMind {
   }
 
   update(dt, context) {
-    const { player, world, creatures, trails, isNight } = context;
+    const { player, world, creatures, trails, carcasses, isNight, season } = context;
     const creature = this.creature;
     const def = creature.def ?? {};
     const needs = creature.needs;
@@ -20,14 +20,39 @@ export class CreatureMind {
     const energyRatio = needs.ratioEnergy();
     const packInfo = this.getPackInfo(creatures, def.packRadius ?? 3.5);
 
-    const threat = this.findThreat(player, creatures, def, packInfo.bravery);
+    if (def.defendDen && creature.den) {
+      const denDist = Math.hypot(player.x - creature.den.x, player.y - creature.den.y);
+      if (denDist < (def.denDefenseRange ?? 4) && packInfo.confidence > 0.35) {
+        return { state: "defend", target: player, speed: 1.1, attackPlayer: true };
+      }
+    }
+
+    const threat = this.findThreat(player, creatures, def, packInfo.bravery, season);
     if (threat) {
       return { state: "flee", target: this.getFleeTarget(threat), speed: 1.2, stressed: true };
+    }
+
+    if (def.diet === "herbivore") {
+      const avoidRange = def.avoidCarcassRange ?? 3;
+      const carcass = carcasses?.findNearest?.(creature.x, creature.y, avoidRange);
+      if (carcass) {
+        return { state: "flee", target: this.getFleeTarget(carcass), speed: 1.05, stressed: true };
+      }
     }
 
     const criticalThirst = thirstRatio < (def.criticalThirst ?? 0.2);
     const criticalHunger = hungerRatio < (def.criticalHunger ?? 0.25);
     const needsRest = energyRatio < (def.restThreshold ?? 0.25);
+    const drought = season?.drought ?? false;
+
+    if (drought && !def.nocturnal && !isNight && hungerRatio > 0.45 && thirstRatio > 0.4) {
+      const homeTarget = creature.den ?? { x: creature.homeX, y: creature.homeY };
+      const homeDist = Math.hypot(creature.x - homeTarget.x, creature.y - homeTarget.y);
+      if (homeDist > (def.homeRange ?? 5)) {
+        return { state: "return", target: { x: homeTarget.x, y: homeTarget.y }, speed: 0.65 };
+      }
+      return { state: "rest", target: null, speed: 0 };
+    }
 
     if (criticalThirst) {
       const waterTarget = world.findNearestWaterEdge(creature.x, creature.y, def.waterSearchRange ?? 7);
@@ -37,7 +62,7 @@ export class CreatureMind {
     }
 
     if (criticalHunger) {
-      const foodIntent = this.findFoodIntent(world, creatures, trails, def, hungerRatio);
+      const foodIntent = this.findFoodIntent(world, creatures, trails, carcasses, def, hungerRatio);
       if (foodIntent) return foodIntent;
     }
 
@@ -51,7 +76,7 @@ export class CreatureMind {
     }
 
     if (hungerRatio < (def.hungerThreshold ?? 0.5)) {
-      const foodIntent = this.findFoodIntent(world, creatures, trails, def, hungerRatio);
+      const foodIntent = this.findFoodIntent(world, creatures, trails, carcasses, def, hungerRatio);
       if (foodIntent) return foodIntent;
     }
 
@@ -92,6 +117,7 @@ export class CreatureMind {
     let count = 0;
     creatures.forEach((other) => {
       if (other === creature || other.type !== creature.type) return;
+      if (creature.packId && other.packId && creature.packId !== other.packId) return;
       const dist = Math.hypot(other.x - creature.x, other.y - creature.y);
       if (dist <= radius) count += 1;
     });
@@ -99,13 +125,14 @@ export class CreatureMind {
     return { count, confidence, bravery: 0.35 + confidence * 0.45 };
   }
 
-  findThreat(player, creatures, def, bravery) {
+  findThreat(player, creatures, def, bravery, season) {
     const creature = this.creature;
     let closest = null;
     let closestDist = Infinity;
     if (def.fearPlayer !== false) {
       const pdist = Math.hypot(player.x - creature.x, player.y - creature.y);
-      const fearRange = (def.fleeRange ?? 4.5) * (1 - bravery * 0.35);
+      const droughtMod = season?.drought ? 0.85 : 1;
+      const fearRange = (def.fleeRange ?? 4.5) * (1 - bravery * 0.35) * droughtMod;
       if (pdist < fearRange) {
         closest = player;
         closestDist = pdist;
@@ -116,7 +143,8 @@ export class CreatureMind {
         if (other === creature) return;
         if (!def.predators.includes(other.type)) return;
         const dist = Math.hypot(other.x - creature.x, other.y - creature.y);
-        const fearRange = (def.fleeRange ?? 4.5) * (1 - bravery * 0.35);
+        const droughtMod = season?.drought ? 0.85 : 1;
+        const fearRange = (def.fleeRange ?? 4.5) * (1 - bravery * 0.35) * droughtMod;
         if (dist < fearRange && dist < closestDist) {
           closest = other;
           closestDist = dist;
@@ -134,9 +162,13 @@ export class CreatureMind {
     return { x: creature.x + (dx / dist) * 2.2, y: creature.y + (dy / dist) * 2.2 };
   }
 
-  findFoodIntent(world, creatures, trails, def, hungerRatio) {
+  findFoodIntent(world, creatures, trails, carcasses, def, hungerRatio) {
     const creature = this.creature;
     if (def.diet === "carnivore") {
+      const carcass = carcasses?.findNearest?.(creature.x, creature.y, def.carcassSearchRange ?? 5);
+      if (carcass && hungerRatio < 0.9) {
+        return { state: "feed", target: carcass, speed: 0.9, carcassTarget: carcass };
+      }
       const prey = this.findPrey(creatures, def, def.huntRange ?? 7);
       if (prey) {
         return { state: "hunt", target: prey, speed: 1.1, attackTarget: prey };

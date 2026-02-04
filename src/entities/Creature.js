@@ -51,8 +51,9 @@ export class Creature {
     }
   }
 
-  update(dt, player, world, weatherType, isNight, creatures, trails, onAttack) {
+  update(dt, player, world, weatherType, isNight, creatures, trails, carcasses, season, onAttack) {
     const result = { attackedPlayer: false, attackedPrey: false };
+    this.movedDistance = 0;
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     this.anger = Math.max(0, this.anger - dt);
@@ -61,7 +62,7 @@ export class Creature {
     const nightSpeed = isNight ? this.def?.nightSpeedMultiplier ?? 1.2 : 1;
     const speedMod = (weatherType === "storm" ? 0.85 : weatherType === "fog" ? 0.92 : 1) * nightSpeed;
 
-    let intent = this.mind.update(dt, { player, world, creatures, trails, isNight });
+    let intent = this.mind.update(dt, { player, world, creatures, trails, carcasses, isNight, season });
     const hungerRatio = this.needs.ratioHunger();
     if (this.def?.diet === "carnivore") {
       const dx = player.x - this.x;
@@ -76,7 +77,15 @@ export class Creature {
 
     const moving = intent.speed > 0.1 && intent.state !== "rest";
     const stressed = intent.state === "flee" || intent.state === "hunt" || intent.state === "chase";
-    this.needs.tick(dt, { moving, stressed, nocturnal: this.def?.nocturnal, isNight });
+    this.needs.tick(dt, {
+      moving,
+      stressed,
+      nocturnal: this.def?.nocturnal,
+      isNight,
+      drought: season?.drought,
+      heat: season?.heat,
+      cold: season?.cold,
+    });
 
     if (this.needs.hunger <= 0 || this.needs.thirst <= 0) {
       this.health = clamp(this.health - dt * (this.def?.starveDamage ?? 0.6), 0, this.maxHealth);
@@ -138,6 +147,23 @@ export class Creature {
       return result;
     }
 
+    if (intent.state === "feed" && intent.carcassTarget) {
+      this.state = intent.state;
+      const carcass = intent.carcassTarget;
+      const dist = Math.hypot(carcass.x - this.x, carcass.y - this.y);
+      if (dist < 0.6 && this.actionTimer <= 0) {
+        const bite = this.def?.meatGain ?? 30;
+        const consumed = carcasses?.consume?.(carcass, bite) ?? 0;
+        if (consumed > 0) {
+          this.needs.feed(consumed);
+        }
+        this.actionTimer = 1 + this.rng() * 0.7;
+        return result;
+      }
+      this.moveToward(carcass.x, carcass.y, this.speed * speedMod * 0.85, dt, world);
+      return result;
+    }
+
     if (intent.state === "hunt" && intent.attackTarget) {
       this.state = intent.state;
       const target = intent.attackTarget;
@@ -159,7 +185,7 @@ export class Creature {
       return result;
     }
 
-    if (intent.state === "chase" && intent.target) {
+    if ((intent.state === "chase" || intent.state === "defend") && intent.target) {
       this.state = intent.state;
       const dx = intent.target.x - this.x;
       const dy = intent.target.y - this.y;
@@ -209,6 +235,8 @@ export class Creature {
   }
 
   tryMove(vx, vy, dt, world) {
+    const prevX = this.x;
+    const prevY = this.y;
     const nextX = this.x + vx * dt;
     const nextY = this.y + vy * dt;
     if (
@@ -223,5 +251,7 @@ export class Creature {
     ) {
       this.y = nextY;
     }
+    const moved = Math.hypot(this.x - prevX, this.y - prevY);
+    this.movedDistance += moved;
   }
 }

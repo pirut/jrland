@@ -245,3 +245,17 @@ Test log:
 TODOs (next agent):
 - Add visible den ownership (pack IDs) and den defense behavior.
 - Tune trail visibility or gate behind debug toggle if it’s too noisy.
+
+Updates (2026-02-04, packs + carcasses + paths + seasons):
+- Added SeasonSystem with seasonal cycles and drought modifier; debug HUD + text state report season + drought.
+- Added CarcassSystem and carcass rendering; carnivores will feed on carcasses before hunting.
+- Herbivores avoid carcass sites; wolves defend dens when players approach.
+- Added pack IDs tied to dens; pack confidence only counts same-pack members.
+- Added foot traffic wear that slowly forms paths on grass/dirt/sand tiles; decay over time.
+
+Test log:
+- Ran Playwright client after pack/carcass/path updates (latest: shot-1-1770231531783.png, state-1-1770231531783.json).
+
+TODOs (next agent):
+- Surface season effects to players via a small HUD icon or tooltip.
+- Consider exposing a debug toggle to show trail/path overlays if needed.

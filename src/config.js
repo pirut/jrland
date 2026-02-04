@@ -8,6 +8,11 @@ export const CONFIG = {
   resourceRespawn: {
     berrybush: { min: 70, max: 130 },
   },
+  paths: {
+    wearThreshold: 8,
+    maxWear: 22,
+    decay: 0.12,
+  },
 };
 
 export const BUILDINGS = {
@@ -220,6 +225,9 @@ export const CREATURES = {
     packRadius: 3.5,
     trailSpacing: 0.55,
     scentRange: 5.5,
+    avoidCarcassRange: 3.5,
+    carcassNutrition: 46,
+    carcassTtl: 80,
     grazeGain: 12,
     berryGain: 34,
     drinkGain: 38,
@@ -262,6 +270,10 @@ export const CREATURES = {
     denSearchRange: 10,
     scentRange: 7.5,
     trailSpacing: 0.6,
+    defendDen: true,
+    denDefenseRange: 4.6,
+    carcassNutrition: 38,
+    carcassTtl: 70,
     meatGain: 40,
     needs: {
       maxHunger: 110,

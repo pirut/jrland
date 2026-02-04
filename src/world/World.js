@@ -1,5 +1,5 @@
 import { Random } from "../core/Random.js";
-import { BUILDINGS } from "../config.js";
+import { BUILDINGS, CONFIG } from "../config.js";
 
 export class World {
   constructor(seed) {
@@ -68,6 +68,7 @@ export class World {
       creatures: [],
       removedCreatures: new Set(),
       dens: [],
+      pathWear: new Map(),
     };
     const rng = Random.mulberry32(Random.hash2(cx, cy, this.seed));
     const centerX = cx * this.chunkSize + this.chunkSize / 2;
@@ -86,6 +87,7 @@ export class World {
           type: "wolf_den",
           x: tx + 0.5,
           y: ty + 0.5,
+          packId: `pack:${cx},${cy}`,
         });
       }
     }
@@ -339,6 +341,48 @@ export class World {
           chunk.removed.delete(id);
         } else {
           chunk.respawn.set(id, next);
+        }
+      });
+    });
+    this.updatePaths(dt);
+  }
+
+  addFootTraffic(x, y, amount) {
+    const tileX = Math.floor(x);
+    const tileY = Math.floor(y);
+    const type = this.tileType(tileX, tileY);
+    if (type === "water" || type === "rock") return;
+    const size = this.chunkSize;
+    const cx = Math.floor(tileX / size);
+    const cy = Math.floor(tileY / size);
+    const chunk = this.buildChunk(cx, cy);
+    const key = `${tileX},${tileY}`;
+    const current = chunk.pathWear.get(key) ?? 0;
+    const maxWear = CONFIG.paths?.maxWear ?? 20;
+    const next = Math.min(maxWear, current + amount);
+    chunk.pathWear.set(key, next);
+  }
+
+  getPathWear(tx, ty) {
+    const size = this.chunkSize;
+    const cx = Math.floor(tx / size);
+    const cy = Math.floor(ty / size);
+    const chunk = this.buildChunk(cx, cy);
+    const key = `${tx},${ty}`;
+    return chunk.pathWear.get(key) ?? 0;
+  }
+
+  updatePaths(dt) {
+    const decay = CONFIG.paths?.decay ?? 0.1;
+    this.chunks.forEach((chunk) => {
+      if (!chunk.pathWear || chunk.pathWear.size === 0) return;
+      const entries = Array.from(chunk.pathWear.entries());
+      entries.forEach(([key, value]) => {
+        const next = value - decay * dt;
+        if (next <= 0.05) {
+          chunk.pathWear.delete(key);
+        } else {
+          chunk.pathWear.set(key, next);
         }
       });
     });

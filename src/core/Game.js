@@ -11,6 +11,7 @@ import { QuestSystem } from "../systems/QuestSystem.js";
 import { CreatureSystem } from "../systems/CreatureSystem.js";
 import { WorldEventSystem } from "../systems/WorldEventSystem.js";
 import { StorageSystem } from "../systems/StorageSystem.js";
+import { SeasonSystem } from "../systems/SeasonSystem.js";
 import { Renderer } from "../render/Renderer.js";
 import { HudRenderer } from "../render/HudRenderer.js";
 import { InputController } from "../core/InputController.js";
@@ -41,6 +42,7 @@ export class Game {
     this.quests = new QuestSystem();
     this.creatures = new CreatureSystem(this.world);
     this.worldEvents = new WorldEventSystem();
+    this.season = new SeasonSystem(seed);
     this.storage = new StorageSystem();
     this.input = new InputController();
     this.renderer = new Renderer(ctx);
@@ -79,6 +81,7 @@ export class Game {
     this.seed = seed;
     this.world.reset(seed);
     this.weather.reset(seed);
+    this.season.reset(seed);
     this.timeOfDay = 0.25;
     this.externalTime = false;
     this.lastUpdate = performance.now();
@@ -582,6 +585,11 @@ export class Game {
     if (wasNight !== this.isNight) {
       this.notifications.push(this.isNight ? "Night falls" : "Daybreak");
     }
+    const seasonChanged = this.season.update(dt);
+    if (seasonChanged) {
+      const droughtLabel = this.season.drought ? " (drought)" : "";
+      this.notifications.push(`Season: ${seasonChanged}${droughtLabel}`);
+    }
     this.worldEvents.update(this, dt);
     if (this.input.wasPressed("e")) this.attemptBuild();
     if (this.input.wasPressed(" ") || this.input.wasPressed("space")) this.attemptAttack();
@@ -594,6 +602,10 @@ export class Game {
     const tileSize = CONFIG.baseTileSize * clamp(scale, 0.8, 1.2);
     const bounds = this.renderer.getViewBounds(this, tileSize);
     this.creatures.update(this, dt, bounds);
+    const playerSpeed = Math.hypot(this.player.vx, this.player.vy);
+    if (playerSpeed > 0.01) {
+      this.world.addFootTraffic(this.player.x, this.player.y, playerSpeed * dt * 1.5);
+    }
   }
 
   render() {
@@ -656,6 +668,11 @@ export class Game {
       weather: {
         type: this.weather.type,
         timeLeft: Number(this.weather.timer.toFixed(1)),
+      },
+      season: {
+        name: this.season?.name ?? "unknown",
+        drought: this.season?.drought ?? false,
+        timeLeft: Number(this.season?.timer?.toFixed?.(1) ?? 0),
       },
       worldEvent: this.worldEvents?.activeEvent
         ? {
@@ -730,6 +747,12 @@ export class Game {
         hunger: Number(creature.needs?.hunger?.toFixed?.(1) ?? 0),
         thirst: Number(creature.needs?.thirst?.toFixed?.(1) ?? 0),
         energy: Number(creature.needs?.energy?.toFixed?.(1) ?? 0),
+      })),
+      carcasses: (this.creatures?.getCarcassesInView?.(bounds) ?? []).slice(0, 10).map((carcass) => ({
+        type: carcass.sourceType,
+        x: Number(carcass.x.toFixed(2)),
+        y: Number(carcass.y.toFixed(2)),
+        nutrition: Number(carcass.nutrition.toFixed(1)),
       })),
       dens: dens.slice(0, 12).map((den) => ({
         type: den.type,

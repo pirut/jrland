@@ -12,25 +12,90 @@ export class StatusBars {
   draw(game) {
     if (!game.ui.showStatusBars) return;
     const baseX = 18;
-    const baseY = 18;
-    const segmentSize = 10;
-    const gap = 3;
+    const baseY = game.view.height - 230;
+    const barWidth = 120;
+    const barHeight = 10;
+    const rowHeight = 22;
     const bars = [
-      { value: game.player.health, max: game.player.maxHealth ?? 100, color: "#b5483b" },
-      { value: game.player.hunger, max: game.player.maxHunger ?? 100, color: "#d8a243" },
-      { value: game.player.stamina, max: game.player.maxStamina ?? 100, color: "#3b8a8f" },
+      { key: "health", label: "Health", value: game.player.health, max: game.player.maxHealth ?? 100, color: "#b5483b" },
+      { key: "hunger", label: "Hunger", value: game.player.hunger, max: game.player.maxHunger ?? 100, color: "#d8a243" },
     ];
     this.ctx.save();
     bars.forEach((bar, row) => {
-      const ratio = bar.max > 0 ? bar.value / bar.max : 0;
-      const filled = Math.round(Math.max(0, Math.min(1, ratio)) * 10);
-      for (let i = 0; i < 10; i += 1) {
-        const x = baseX + i * (segmentSize + gap);
-        const y = baseY + row * (segmentSize + gap + 4);
-        this.ctx.fillStyle = i < filled ? bar.color : "rgba(0,0,0,0.15)";
-        this.ctx.fillRect(x, y, segmentSize, segmentSize);
-      }
+      const ratio = bar.max > 0 ? clamp(bar.value / bar.max, 0, 1) : 0;
+      const y = baseY + row * rowHeight;
+      this.drawStatusIcon(baseX, y + 2, bar.key, bar.color);
+      const barX = baseX + 18;
+      this.ctx.fillStyle = "rgba(255,255,255,0.7)";
+      this.ctx.fillRect(barX, y + 4, barWidth, barHeight);
+      this.ctx.fillStyle = bar.color;
+      this.ctx.fillRect(barX, y + 4, barWidth * ratio, barHeight);
+      this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+      this.ctx.strokeRect(barX, y + 4, barWidth, barHeight);
+      this.ctx.fillStyle = "rgba(15,20,23,0.7)";
+      this.ctx.font = "10px 'Manrope', sans-serif";
+      this.ctx.fillText(bar.label, barX, y);
+      this.ctx.fillText(`${Math.round(bar.value)}/${Math.round(bar.max)}`, barX + barWidth - 44, y + 2);
     });
+    this.ctx.restore();
+  }
+
+  drawStatusIcon(x, y, key, color) {
+    this.ctx.save();
+    this.ctx.fillStyle = "rgba(255,255,255,0.85)";
+    this.ctx.beginPath();
+    this.ctx.arc(x + 6, y + 6, 7, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.fillStyle = color;
+    if (key === "health") {
+      this.ctx.beginPath();
+      this.ctx.arc(x + 4, y + 6, 3, 0, Math.PI * 2);
+      this.ctx.arc(x + 8, y + 6, 3, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.fillRect(x + 4, y + 6, 4, 5);
+    } else if (key === "hunger") {
+      this.ctx.fillRect(x + 5, y + 4, 2, 8);
+      this.ctx.fillRect(x + 3, y + 8, 6, 2);
+    } else if (key === "stamina") {
+      this.ctx.beginPath();
+      this.ctx.moveTo(x + 5, y + 3);
+      this.ctx.lineTo(x + 9, y + 6);
+      this.ctx.lineTo(x + 6, y + 10);
+      this.ctx.lineTo(x + 10, y + 10);
+      this.ctx.lineTo(x + 4, y + 15);
+      this.ctx.lineTo(x + 7, y + 11);
+      this.ctx.lineTo(x + 3, y + 11);
+      this.ctx.closePath();
+      this.ctx.fill();
+    }
+    this.ctx.restore();
+  }
+}
+
+export class StaminaBar {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+
+  draw(game) {
+    if (!game.ui.showStatusBars) return;
+    const ratio =
+      game.player.maxStamina > 0 ? clamp(game.player.stamina / game.player.maxStamina, 0, 1) : 0;
+    if (ratio > 0.98) return;
+    const width = 220;
+    const height = 10;
+    const x = (game.view.width - width) / 2;
+    const y = game.view.height - 110;
+    this.ctx.save();
+    this.ctx.fillStyle = "rgba(255,255,255,0.6)";
+    this.ctx.fillRect(x, y, width, height);
+    this.ctx.fillStyle = "rgba(64, 130, 140, 0.9)";
+    this.ctx.fillRect(x, y, width * ratio, height);
+    this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    this.ctx.strokeRect(x, y, width, height);
+    this.ctx.fillStyle = "rgba(15,20,23,0.7)";
+    this.ctx.font = "10px 'Manrope', sans-serif";
+    this.ctx.fillText("Stamina", x + 4, y - 2);
     this.ctx.restore();
   }
 }
@@ -204,8 +269,15 @@ export class BuildPlanner {
     if (!blueprint) return;
     const panelWidth = 220;
     const panelHeight = 96;
-    const x = 18;
-    const y = game.view.height - panelHeight - 120;
+    let x = game.view.width - panelWidth - 18;
+    let y = game.view.height - panelHeight - 260;
+    const catalog = game.ui.buildCatalogLayout?.panel;
+    if (catalog) {
+      y = catalog.y - panelHeight - 12;
+    }
+    if (y < 80) {
+      y = 80;
+    }
     const costText = Object.entries(blueprint.cost)
       .map(([key, value]) => `${key} ${value}`)
       .join(" · ");
@@ -385,39 +457,64 @@ export class InventoryReadout {
 
   draw(game) {
     if (!game.ui.showInventoryReadout) return;
-    const capacity = `${game.inventory.count()}/${game.inventory.capacity()}`;
-    const axe =
-      game.gear.axe === "reinforced_axe"
-        ? "Axe+"
-        : game.gear.axe === "stone_axe"
-          ? "Axe"
-          : "None";
-    const pick =
-      game.gear.pick === "reinforced_pick"
-        ? "Pick+"
-        : game.gear.pick === "stone_pick"
-          ? "Pick"
-          : "None";
-    const weapon =
-      game.gear.weapon === "reinforced_spear"
-        ? "Spear+"
-        : game.gear.weapon === "stone_spear"
-          ? "Spear"
-          : "None";
-    const armor = game.gear.armor === "hide_armor" ? "Hide" : "None";
-    const storageBonus = game.structureContext.storageBonus
-      ? `  |  Storage +${game.structureContext.storageBonus}`
-      : "";
-    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Meat ${game.inventory.getCount("meat")}  |  Cooked ${game.inventory.getCount("cooked_meat")}  |  Hide ${game.inventory.getCount("hide")}  |  Carry ${capacity}${storageBonus}  |  Axe ${axe}  |  Pick ${pick}  |  Weapon ${weapon}  |  Armor ${armor}`;
-    this.ctx.save();
-    this.ctx.font = "12px 'Manrope', sans-serif";
-    const width = this.ctx.measureText(text).width + 16;
+    const resources = [
+      { id: "wood", label: "Wood" },
+      { id: "stone", label: "Stone" },
+      { id: "planks", label: "Planks" },
+      { id: "berry", label: "Berries" },
+      { id: "meat", label: "Meat" },
+      { id: "cooked_meat", label: "Cooked" },
+      { id: "hide", label: "Hide" },
+    ];
     const x = 18;
-    const y = game.view.height - 60;
+    const y = game.view.height - 160;
+    const cellW = 56;
+    const padding = 10;
+    const width = resources.length * cellW + padding * 2;
+    const height = 48;
+    this.ctx.save();
+    this.ctx.fillStyle = "rgba(255,255,255,0.78)";
+    this.ctx.fillRect(x, y, width, height);
+    this.ctx.strokeStyle = "rgba(0,0,0,0.18)";
+    this.ctx.strokeRect(x, y, width, height);
+    this.ctx.font = "10px 'Manrope', sans-serif";
+    resources.forEach((item, index) => {
+      const cellX = x + padding + index * cellW;
+      drawItemIcon(this.ctx, item.id, cellX, y + 10, 2);
+      this.ctx.fillStyle = "rgba(15,20,23,0.7)";
+      this.ctx.fillText(String(game.inventory.getCount(item.id)), cellX + 20, y + 24);
+      this.ctx.fillStyle = "rgba(15,20,23,0.45)";
+      this.ctx.fillText(item.label, cellX, y + 38);
+    });
+    const capacity = `${game.inventory.count()}/${game.inventory.capacity()}`;
+    const equipX = x;
+    const equipY = y + height + 6;
+    const equipW = width;
+    const equipH = 26;
     this.ctx.fillStyle = "rgba(255,255,255,0.7)";
-    this.ctx.fillRect(x - 8, y - 12, width, 18);
-    this.ctx.fillStyle = "rgba(15,20,23,0.75)";
-    this.ctx.fillText(text, x, y);
+    this.ctx.fillRect(equipX, equipY, equipW, equipH);
+    this.ctx.strokeStyle = "rgba(0,0,0,0.16)";
+    this.ctx.strokeRect(equipX, equipY, equipW, equipH);
+    this.ctx.fillStyle = "rgba(15,20,23,0.7)";
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    this.ctx.fillText(`Carry ${capacity}`, equipX + 10, equipY + 17);
+    const gear = [
+      { id: game.gear.axe !== "none" ? game.gear.axe : null, label: "Axe" },
+      { id: game.gear.pick !== "none" ? game.gear.pick : null, label: "Pick" },
+      { id: game.gear.weapon !== "none" ? game.gear.weapon : null, label: "Weapon" },
+      { id: game.gear.armor !== "none" ? game.gear.armor : null, label: "Armor" },
+    ];
+    gear.forEach((slot, idx) => {
+      const gx = equipX + 120 + idx * 68;
+      if (slot.id) {
+        drawItemIcon(this.ctx, slot.id, gx, equipY + 5, 2);
+      } else {
+        this.ctx.fillStyle = "rgba(15,20,23,0.15)";
+        this.ctx.fillRect(gx + 2, equipY + 6, 12, 12);
+      }
+      this.ctx.fillStyle = "rgba(15,20,23,0.6)";
+      this.ctx.fillText(slot.label, gx + 18, equipY + 16);
+    });
     this.ctx.restore();
   }
 }
@@ -495,7 +592,7 @@ export class InventoryOverlay {
     const panelWidth = layout.panel.w;
     const panelHeight = layout.panel.h;
     this.ctx.save();
-    this.ctx.fillStyle = "rgba(255,255,255,0.85)";
+    this.ctx.fillStyle = "rgba(248,248,246,0.9)";
     this.ctx.fillRect(x, y, panelWidth, panelHeight);
     this.ctx.strokeStyle = "rgba(0,0,0,0.15)";
     this.ctx.strokeRect(x, y, panelWidth, panelHeight);
@@ -510,12 +607,20 @@ export class InventoryOverlay {
       this.ctx.fillText("Storage", layout.storageX, layout.storageY - 10);
     }
 
+    this.ctx.fillStyle = "rgba(0,0,0,0.04)";
+    this.ctx.fillRect(layout.gridX - 8, layout.gridY - 8, 9 * (layout.slotSize + layout.gap) - layout.gap + 16, 3 * (layout.slotSize + layout.gap) - layout.gap + 16);
+    this.ctx.fillRect(layout.gridX - 8, layout.hotbarY - 8, 9 * (layout.slotSize + layout.gap) - layout.gap + 16, layout.slotSize + 16);
+    this.ctx.fillRect(layout.craftX - 8, layout.craftY - 8, 2 * (layout.slotSize + layout.gap) - layout.gap + 16, 2 * (layout.slotSize + layout.gap) - layout.gap + 16);
+    if (layout.hasStorage) {
+      this.ctx.fillRect(layout.storageX - 8, layout.storageY - 8, 4 * (layout.slotSize + layout.gap) - layout.gap + 16, 3 * (layout.slotSize + layout.gap) - layout.gap + 16);
+    }
+
     game.inventory.slots.forEach((slot, index) => {
       const rect = layout.slots[index];
       if (!rect) return;
-      this.ctx.fillStyle = "rgba(255,255,255,0.8)";
+      this.ctx.fillStyle = "rgba(255,255,255,0.85)";
       this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-      this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+      this.ctx.strokeStyle = "rgba(0,0,0,0.25)";
       this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
       if (slot.id) {
         drawItemIcon(this.ctx, slot.id, rect.x + 6, rect.y + 6, 2);
@@ -529,9 +634,9 @@ export class InventoryOverlay {
     game.craftingGrid.forEach((slot, index) => {
       const rect = layout.craftSlots[index];
       if (!rect) return;
-      this.ctx.fillStyle = "rgba(255,255,255,0.8)";
+      this.ctx.fillStyle = "rgba(255,255,255,0.85)";
       this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-      this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+      this.ctx.strokeStyle = "rgba(0,0,0,0.25)";
       this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
       if (slot.id) {
         drawItemIcon(this.ctx, slot.id, rect.x + 6, rect.y + 6, 2);
@@ -548,9 +653,9 @@ export class InventoryOverlay {
       game.structureContext
     );
     const output = result?.output ?? null;
-    this.ctx.fillStyle = "rgba(255,255,255,0.8)";
+    this.ctx.fillStyle = "rgba(255,255,255,0.85)";
     this.ctx.fillRect(layout.outputSlot.x, layout.outputSlot.y, layout.outputSlot.w, layout.outputSlot.h);
-    this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    this.ctx.strokeStyle = "rgba(0,0,0,0.25)";
     this.ctx.strokeRect(layout.outputSlot.x, layout.outputSlot.y, layout.outputSlot.w, layout.outputSlot.h);
     if (output) {
       drawItemIcon(this.ctx, output.id, layout.outputSlot.x + 6, layout.outputSlot.y + 6, 2);
@@ -567,8 +672,8 @@ export class InventoryOverlay {
         this.ctx.fillText(label, layout.outputSlot.x + 4, layout.outputSlot.y + 20);
       }
     }
-    this.ctx.font = "12px 'Manrope', sans-serif";
-    this.ctx.fillStyle = "rgba(15,20,23,0.7)";
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
     const statsX = x + 16;
     const statsY = y + panelHeight - 62;
     const statsLine2Y = y + panelHeight - 44;
@@ -610,9 +715,9 @@ export class InventoryOverlay {
         storage.slots.forEach((slot, index) => {
           const rect = layout.storageSlots[index];
           if (!rect) return;
-          this.ctx.fillStyle = "rgba(255,255,255,0.8)";
+          this.ctx.fillStyle = "rgba(255,255,255,0.85)";
           this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-          this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+          this.ctx.strokeStyle = "rgba(0,0,0,0.25)";
           this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
           if (slot.id) {
             drawItemIcon(this.ctx, slot.id, rect.x + 6, rect.y + 6, 2);
@@ -639,6 +744,10 @@ export class InventoryOverlay {
         this.ctx.fillText(String(game.ui.cursorItem.count), game.ui.mouseX + 4, game.ui.mouseY + 12);
       }
     }
+
+    this.ctx.fillStyle = "rgba(15,20,23,0.45)";
+    this.ctx.font = "10px 'Manrope', sans-serif";
+    this.ctx.fillText("Shift + Right Click: Split · Shift + Click: Transfer · Shift + Click Output: Craft All", x + 16, y + panelHeight - 6);
     this.ctx.restore();
   }
 

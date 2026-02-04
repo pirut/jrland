@@ -160,7 +160,12 @@ export class InventoryUI {
       const rect = layout.slots[i];
       if (!rect) continue;
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-        if (mods.shiftKey && button === 0) {
+        if (mods.shiftKey && this.cursor) {
+          if (this.openSplitPickerFromCursor(game, game.inventory.slots[i])) {
+            return;
+          }
+        }
+        if (mods.shiftKey && button === 0 && !this.cursor) {
           if (layout.hasStorage) {
             const moved = this.quickTransfer(game.inventory.slots[i], game.storage.getActiveContainer()?.slots ?? []);
             if (moved) {
@@ -171,7 +176,7 @@ export class InventoryUI {
             return;
           }
         }
-        if (mods.shiftKey && button === 2 && this.openSplitPicker(game, game.inventory.slots[i])) {
+        if (mods.shiftKey && button === 2 && !this.cursor && this.openSplitPicker(game, game.inventory.slots[i])) {
           return;
         }
         this.cursor = this.handleSlotClickAdvanced(game.inventory.slots[i], this.cursor, button);
@@ -197,14 +202,19 @@ export class InventoryUI {
           const rect = layout.storageSlots[i];
           if (!rect) continue;
           if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-            if (mods.shiftKey && button === 0) {
+            if (mods.shiftKey && this.cursor) {
+              if (this.openSplitPickerFromCursor(game, storage.slots[i])) {
+                return;
+              }
+            }
+            if (mods.shiftKey && button === 0 && !this.cursor) {
               const moved = this.quickTransfer(storage.slots[i], game.inventory.slots);
               if (moved) {
                 game.ui.cursorItem = this.cursor;
                 return;
               }
             }
-            if (mods.shiftKey && button === 2 && this.openSplitPicker(game, storage.slots[i])) {
+            if (mods.shiftKey && button === 2 && !this.cursor && this.openSplitPicker(game, storage.slots[i])) {
               return;
             }
             this.cursor = this.handleSlotClickAdvanced(storage.slots[i], this.cursor, button);
@@ -297,8 +307,29 @@ export class InventoryUI {
     game.ui.splitPicker = {
       active: true,
       slot,
+      source: "slot",
+      target: null,
       max: slot.count,
       amount: Math.max(1, Math.floor(slot.count / 2)),
+    };
+    return true;
+  }
+
+  openSplitPickerFromCursor(game, targetSlot) {
+    if (!this.cursor?.id || this.cursor.count <= 1) return false;
+    const canPlace =
+      !targetSlot.id || targetSlot.id === this.cursor.id;
+    if (!canPlace) return false;
+    const maxStack = ITEMS[this.cursor.id]?.maxStack ?? 1;
+    const availableSpace = targetSlot.id ? Math.max(0, maxStack - targetSlot.count) : maxStack;
+    if (availableSpace <= 0) return false;
+    game.ui.splitPicker = {
+      active: true,
+      slot: null,
+      source: "cursor",
+      target: targetSlot,
+      max: Math.min(this.cursor.count, availableSpace),
+      amount: Math.max(1, Math.floor(Math.min(this.cursor.count, availableSpace) / 2)),
     };
     return true;
   }
@@ -331,17 +362,34 @@ export class InventoryUI {
       return;
     }
     if (hit(layout.confirm)) {
-      const id = picker.slot.id;
       const amount = Math.min(picker.max, Math.max(1, picker.amount));
-      const remaining = picker.slot.count - amount;
-      if (remaining <= 0) {
-        picker.slot.id = null;
-        picker.slot.count = 0;
-      } else {
-        picker.slot.count = remaining;
+      if (picker.source === "slot" && picker.slot) {
+        const id = picker.slot.id;
+        const remaining = picker.slot.count - amount;
+        if (remaining <= 0) {
+          picker.slot.id = null;
+          picker.slot.count = 0;
+        } else {
+          picker.slot.count = remaining;
+        }
+        this.cursor = { id, count: amount };
+        game.ui.cursorItem = this.cursor;
+      } else if (picker.source === "cursor" && picker.target && this.cursor) {
+        const id = this.cursor.id;
+        const maxStack = ITEMS[id]?.maxStack ?? 1;
+        const target = picker.target;
+        const space = target.id ? Math.max(0, maxStack - target.count) : maxStack;
+        const transfer = Math.min(space, amount);
+        if (!target.id) {
+          target.id = id;
+          target.count = transfer;
+        } else {
+          target.count += transfer;
+        }
+        const remaining = this.cursor.count - transfer;
+        this.cursor = remaining > 0 ? { id, count: remaining } : null;
+        game.ui.cursorItem = this.cursor;
       }
-      this.cursor = { id, count: amount };
-      game.ui.cursorItem = this.cursor;
       game.ui.splitPicker = null;
       game.ui.splitPickerLayout = null;
       return;

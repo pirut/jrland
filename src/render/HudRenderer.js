@@ -1,5 +1,6 @@
 import {
   StatusBars,
+  StaminaBar,
   ProgressBar,
   QuestPanel,
   Hotbar,
@@ -19,6 +20,7 @@ export class HudRenderer {
     this.ctx = ctx;
     this.components = [
       new StatusBars(ctx),
+      new StaminaBar(ctx),
       new ProgressBar(ctx),
       new QuestPanel(ctx),
       new BuildBanner(ctx),

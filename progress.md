@@ -206,3 +206,14 @@ Updates (2026-02-04, advanced inventory + catalog tooltips):
 
 Test log:
 - Ran Playwright client after catalog tooltip/split picker changes; screenshots/state captured in output/web-game (latest: shot-1-1770220039716.png, state-1-1770220039716.json).
+
+Updates (2026-02-04, HUD polish pass):
+- Reworked HUD layout toward a cleaner survival-game style: compact icon strip for resources and a dedicated gear row.
+- Health + hunger now use icon-led bars; stamina bar appears only when not full, centered above the hotbar.
+- Build planner now anchors above the build catalog to avoid overlapping the stats cluster.
+- Inventory overlay backgrounds and slot groupings are softened for readability; added a helper hint strip for split/craft actions.
+
+Test log:
+- Ran Playwright client after HUD polish pass (latest: shot-2-1770223591414.png, state-2-1770223591414.json).
+- Ran build-mode capture to confirm layout spacing (latest: shot-1-1770223652945.png, state-1-1770223652945.json).
+- Ran inventory overlay capture (latest: shot-1-1770223718628.png, state-1-1770223718628.json).

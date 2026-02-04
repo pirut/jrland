@@ -1,0 +1,142 @@
+Original prompt: I want to make an MMO game. I want it to be a simple survival game for now. This is going to be a long term project so make sure you lay a good foundation so I can add in systems as I go. and make good notes so future agents can work on this. The game can be a simple 2d game with a procedurally generated world. The setting should be realistic and the art style should be minimalist
+
+Notes:
+- Initialized minimal static web project (index.html/style.css/game.js) with a single canvas and overlay UI.
+- Focused on deterministic world generation hooks, state separation, and a procedural tile system as a foundation for future MMO work.
+
+TODOs:
+- Add networking stubs (authoritative server sync, player list) when ready to start MMO features.
+- Add persistence hooks (save/load or server-driven state) once core gameplay stabilizes.
+- Expand survival loop (crafting, shelters, tools, hunger/temperature, wildlife) after foundation is solid.
+
+Decisions:
+- World is infinite via chunked procedural generation (value + fractal noise) and a deterministic seed.
+- Entities are generated per chunk with a removal set so harvesting can be persisted later.
+- Added `window.advanceTime(ms)` and `window.render_game_to_text()` hooks for deterministic testing and bots.
+
+Test log:
+- Ran Playwright client (3 iterations) against http://localhost:5173 with start button and default actions.
+- Screenshots captured in output/web-game (shot-0.png..shot-2.png) and state JSON (state-0.json..state-2.json).
+- Visuals confirmed: biome tiles, trees, player marker, HUD bars, inventory text.
+
+TODOs (next agent):
+- Add explicit world origin/seed selection UI (and display current seed in HUD for debugging).
+- Add basic interaction feedback (highlight nearest resource in range, show gather cooldown).
+- Add water collision smoothing (edge nudging) and optionally swim state.
+
+Updates (2026-02-03):
+- Added seed input + randomize button on the start menu; seed now persists in URL and resets world on game start.
+- Implemented interaction feedback: nearest resource highlight ring with "E" prompt and gather cooldown bar under HUD.
+- Added debug HUD showing seed/time/biome/weather.
+- Added day/night overlay with twilight tint and a simple weather system (clear/overcast/rain + rain streaks).
+
+Test log:
+- Re-ran Playwright client (3 iterations) after changes; screenshots/state captured in output/web-game.
+
+TODOs (next agent):
+- Add feedback when gather is on cooldown (sound/flash).
+- Add toggle to hide debug HUD for release builds.
+- Consider world preset configs (biome ratios, weather patterns) per seed for scenario variety.
+
+Updates (2026-02-03, polish pass):
+- Added biome bands (prairie/woodland/highland) that bias terrain thresholds, tree/boulder spawn rates, and palette tints.
+- Added debug HUD toggle (`) and in-game notifications for gather success/failure/cooldown.
+- Added visual polish: water shimmer, pulsing resource highlight, player shadow, and notification toasts.
+- Added debug HUD line for biome band; render_game_to_text now includes biomeBand + notifications + debug flag.
+
+Updates (2026-02-03, building pass):
+- Added build mode (toggle with B), blueprint selection (1 campfire, 2 shelter), and placement with E.
+- Implemented structure persistence per chunk and rendering for campfires/shelters.
+- Added build preview ghost with validity checks (water, resource blocking, occupied space) and build HUD with costs.
+- Added build info to render_game_to_text (structures list + build state).
+
+TODOs (next agent):
+- Add structure interaction (rest at campfire, enter shelter) and durability decay.
+- Add crafting UI to convert raw resources into build kits.
+- Consider snap-to-grid indicator + rotate option for larger structures.
+
+Updates (2026-02-03, crafting + structure effects):
+- Added crafting overlay (C) with two recipes: Stone Axe (gather +1 yield) and Backpack (carry +10).
+- Inventory now tracks capacity and used slots; gathering respects capacity and tool bonuses.
+- Added structure effects: campfire slows hunger drain + boosts healing; shelter boosts stamina regen.
+- Added structure proximity context to HUD/state; campfire now has a soft glow.
+- Added build preview error text and disabled resource highlight while building.
+
+Test log:
+- Ran Playwright client (3 iterations) after crafting/structure changes.
+- Ran a build/craft action sequence to verify build mode + crafting overlay.
+
+Updates (2026-02-03, OOP modularization + UI refresh):
+- Refactored game into modular classes (World, Player, Inventory, BuildSystem, CraftingSystem, WeatherSystem, Renderer, etc.).
+- Centralized config + helpers and moved rendering into a dedicated Renderer class.
+- Updated UI visuals: new font, softer panels, gradients, rounded HUD cards, and improved overlays.
+- Preserved deterministic hooks: window.advanceTime(ms) + window.render_game_to_text().
+
+Updates (2026-02-03, modularization + Minecraft-like HUD):
+- Split game into ES modules under src/ (core, world, entities, systems, render, ui, utils).
+- Replaced DOM HUD with canvas HUD that mimics Minecraft layout (segmented bars + hotbar slots).
+- HUD now renders in-canvas via HudRenderer, keeping all game visuals in one pass.
+- Updated index.html to load src/main.js as module and removed legacy game.js.
+
+Updates (2026-02-03, UI layers + Minecraft HUD + chat/options):
+- Added UI state layer and canvas HUD overlay with Minecraft-style segmented bars + 9-slot hotbar.
+- Added pixel icons for campfire/shelter and chat overlay (T to open, Enter to send).
+- Added inventory overlay (I) and HUD toggles in pause menu.
+- Added chat system with in-canvas input display and message history.
+
+Updates (2026-02-03, HUD modularization):
+- Split the canvas HUD into discrete OOP components (StatusBars, Hotbar, BuildBanner, InventoryReadout, Notifications, ChatOverlay, InventoryOverlay, DebugPanel).
+- HudRenderer now composes components to make UI changes modular and easier to extend.
+
+Test log:
+- Ran Playwright client (3 iterations) after HUD component split; screenshots/state captured in output/web-game.
+
+Updates (2026-02-04, progression + building depth + canopy):
+- Added progression system (XP, levels, level-up notifications) with a HUD progress bar and player stat scaling.
+- Added new gatherable: berry bushes, foraging yields berries (edible with R) and XP.
+- Added new crafting resource (planks) and recipes gated by level + workbench proximity.
+- Added new structures (workbench, hut) with unlock levels; build selection now supports 1-4.
+- Building placement now uses multi-tile footprints with overlap checks.
+- Added structure layers: base + roof/canopy with transparency when player is underneath; added soft shadows.
+- Structure context now tracks under-canopy and near-workbench; debug HUD shows these.
+- Updated render_game_to_text with progression + max stat values.
+- Exposed `window.startGame()` for automated tests (Playwright uses eval action).
+- Tweaked inventory overlay layout (more spacing + expanded footer stats).
+- Updated Playwright client to support `actions` (eval) and unique screenshot/state filenames; default actions file now calls `window.startGame()`.
+
+Test log:
+- Ran Playwright client after progression/building updates; screenshots/state captured in output/web-game.
+- Ran an inventory overlay capture via scripted actions to verify the crafting panel layout.
+
+TODOs (next agent):
+- Add buildable decoration variants (fences, floor tiles) using the footprint system.
+- Add richer interaction with workbench (repair tool, unlock tiered recipes).
+- Add simple quests or milestones to guide progression.
+
+Updates (2026-02-03, progression + building depth + canopy layers):
+- Added progression system with XP from gather/build/forage/craft and level-ups that boost player max stats + speeds.
+- Added berry bushes as a forageable resource (berries item + edible via R).
+- Added planks crafting (4 wood -> 2 planks) and new buildings: workbench (level 3) and hut (level 4).
+- Buildings now store footprints; build previews respect multi-tile sizes and overlap checks.
+- Build unlocks are gated by level; blueprints are auto-granted to inventory on unlock.
+- Building visuals now use layered bases + roof overlays with transparency when the player walks under canopies/roofs.
+- Crafting output shows locked state; workbench-required recipes are enforced by proximity.
+- Controls updated: build selection 1-4, use item R.
+
+Test log:
+- Ran Playwright client (3 iterations) after progression/building updates; screenshots/state captured in output/web-game (latest: shot-2-1770209627480.png, state-2-1770209627480.json).
+
+TODOs (next agent):
+- Improve start menu click reliability for automation (still flaky in Playwright selector path).
+- Add more mid-game progression beats (e.g., tool tiers, stamina bonuses from huts, simple quests).
+- Add structure interaction prompts (enter hut, rest at campfire) and placement rotation.
+
+Updates (2026-02-03, progression quests + build UX):
+- Added QuestSystem with starter quests (gather wood/stone/berries, craft planks, build campfire/shelter) and XP rewards.
+- Added stone pick tool + recipe; pick doubles stone yield while axe doubles wood yield.
+- Added structure interactions: E on campfire/shelter/workbench/hut for rest/craft/sleep.
+- Added blueprint rotation (Q) and grid-aligned preview outlines.
+- HUD now shows active quests and interaction labels.
+
+Test log:
+- Ran Playwright client after quests + build UX changes; screenshots/state captured in output/web-game (latest: shot-2-1770210783470.png, state-2-1770210783470.json).

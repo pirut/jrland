@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Frontier Survival</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="game-root">
+      <canvas id="game-canvas" width="960" height="540"></canvas>
+      <div id="menu" class="overlay visible" aria-hidden="false">
+        <div class="panel">
+          <h1>Frontier Survival</h1>
+          <p>A minimalist survival sandbox.</p>
+          <div class="controls">
+            <div>Move: WASD</div>
+            <div>Sprint: Shift</div>
+            <div>Gather/Build: E</div>
+            <div>Use Item: R</div>
+            <div>Build Mode: B</div>
+            <div>Select Build: 1 (campfire), 2 (shelter), 3 (workbench), 4 (hut)</div>
+            <div>Rotate Blueprint: Q</div>
+            <div>Inventory / Crafting: I</div>
+            <div>Advanced crafting requires a workbench nearby</div>
+            <div>Chat: T</div>
+            <div>Use Item: R</div>
+            <div>Toggle Fullscreen: F (Esc exits)</div>
+            <div>Pause: P</div>
+            <div>Toggle Debug: `</div>
+          </div>
+          <div class="seed-control">
+            <label for="seed-input">World Seed</label>
+            <div class="seed-row">
+              <input id="seed-input" type="number" inputmode="numeric" />
+              <button id="seed-random" type="button">Randomize</button>
+            </div>
+          </div>
+          <button id="start-btn">Enter World</button>
+          <div class="seed">Seed: <span id="seed-label"></span></div>
+        </div>
+      </div>
+      <div id="pause" class="overlay" aria-hidden="true">
+        <div class="panel">
+          <h2>Paused</h2>
+          <p>Press P to resume.</p>
+          <div class="options">
+            <h3>HUD Options</h3>
+            <label><input type="checkbox" data-ui="showHud" checked /> Show HUD</label>
+            <label><input type="checkbox" data-ui="showStatusBars" checked /> Status Bars</label>
+            <label><input type="checkbox" data-ui="showHotbar" checked /> Hotbar</label>
+            <label><input type="checkbox" data-ui="showInventoryReadout" checked /> Inventory Readout</label>
+            <label><input type="checkbox" data-ui="showBuildBanner" checked /> Build Banner</label>
+            <label><input type="checkbox" data-ui="showChat" checked /> Chat</label>
+            <label><input type="checkbox" data-ui="showProgress" checked /> Progress Bar</label>
+            <label><input type="checkbox" data-ui="showDebug" checked /> Debug Panel</label>
+          </div>
+          <button id="resume-btn">Resume</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

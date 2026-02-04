@@ -1,0 +1,586 @@
+import { CONFIG, BUILDINGS, ITEMS, PROGRESSION } from "../config.js";
+import { World } from "../world/World.js";
+import { Player } from "../entities/Player.js";
+import { Inventory } from "../systems/Inventory.js";
+import { BuildSystem } from "../systems/BuildSystem.js";
+import { WeatherSystem } from "../systems/WeatherSystem.js";
+import { NotificationCenter } from "../systems/NotificationCenter.js";
+import { ChatSystem } from "../systems/ChatSystem.js";
+import { Progression } from "../systems/Progression.js";
+import { QuestSystem } from "../systems/QuestSystem.js";
+import { Renderer } from "../render/Renderer.js";
+import { HudRenderer } from "../render/HudRenderer.js";
+import { InputController } from "../core/InputController.js";
+import { clamp, lerp } from "../utils/math.js";
+import { UIState } from "../ui/UIState.js";
+import { InventoryUI } from "../ui/InventoryUI.js";
+
+export class Game {
+  constructor({
+    ctx,
+    seed,
+    overlays,
+    seedControls,
+  }) {
+    this.mode = "menu";
+    this.seed = seed;
+    this.view = { width: 0, height: 0 };
+    this.camera = { x: 0, y: 0 };
+    this.world = new World(seed);
+    this.player = new Player();
+    this.inventory = new Inventory();
+    this.build = new BuildSystem();
+    this.craftingGrid = Array.from({ length: 4 }, () => ({ id: null, count: 0 }));
+    this.weather = new WeatherSystem(seed);
+    this.notifications = new NotificationCenter();
+    this.chat = new ChatSystem();
+    this.progression = new Progression();
+    this.quests = new QuestSystem();
+    this.input = new InputController();
+    this.renderer = new Renderer(ctx);
+    this.hudRenderer = new HudRenderer(ctx);
+    this.seedControls = seedControls;
+    this.ui = new UIState();
+    this.inventoryUI = new InventoryUI();
+    this.gear = { tool: "none", backpack: false };
+    this.structureContext = {
+      nearCampfire: false,
+      nearShelter: false,
+      nearWorkbench: false,
+      underCanopy: false,
+    };
+    this.interaction = { target: null, inRange: false, dist: null };
+    this.timeOfDay = 0.25;
+    this.externalTime = false;
+    this.debug = { enabled: true };
+    this.lastUpdate = performance.now();
+    this.overlays = overlays;
+    this.seedControls = seedControls;
+    this.resetWorld(seed);
+  }
+
+  setViewSize(width, height) {
+    this.view.width = width;
+    this.view.height = height;
+  }
+
+  resetWorld(seed) {
+    this.seed = seed;
+    this.world.reset(seed);
+    this.weather.reset(seed);
+    this.timeOfDay = 0.25;
+    this.externalTime = false;
+    this.lastUpdate = performance.now();
+    this.inventory.reset();
+    this.progression.reset();
+    this.quests.reset();
+    this.gear = { tool: "none", backpack: false };
+    this.build.reset();
+    this.notifications.items = [];
+    this.chat.messages = [];
+    this.chat.input = "";
+    this.chat.open = false;
+    this.ui.inventoryOpen = false;
+    this.ui.cursorItem = null;
+    this.ui.activeHotbarIndex = 0;
+    this.craftingGrid = Array.from({ length: 4 }, () => ({ id: null, count: 0 }));
+    this.seedStarterItems();
+    this.applyProgression();
+    this.interaction = { target: null, inRange: false, dist: null };
+    this.structureContext = {
+      nearCampfire: false,
+      nearShelter: false,
+      nearWorkbench: false,
+      underCanopy: false,
+    };
+    const spawn = this.world.findSpawn();
+    this.player.reset(spawn);
+    this.camera.x = spawn.x;
+    this.camera.y = spawn.y;
+    if (this.seedControls?.onSeedChanged) {
+      this.seedControls.onSeedChanged(seed);
+    }
+  }
+
+  seedStarterItems() {
+    this.inventory.slots[0] = { id: "campfire", count: 1 };
+  }
+
+  hasItem(id) {
+    return this.inventory.slots.some((slot) => slot.id === id);
+  }
+
+  grantBlueprint(id) {
+    if (this.hasItem(id)) return;
+    const slot = this.inventory.slots.find((entry) => !entry.id);
+    if (slot) {
+      slot.id = id;
+      slot.count = 1;
+    }
+  }
+
+  ensureBlueprints() {
+    Object.entries(BUILDINGS).forEach(([id]) => {
+      if (this.isBuildUnlocked(id)) {
+        this.grantBlueprint(id);
+      }
+    });
+  }
+
+  isBuildUnlocked(id) {
+    const def = BUILDINGS[id];
+    if (!def) return false;
+    const required = def.unlockLevel ?? 1;
+    return this.progression.level >= required;
+  }
+
+  applyProgression() {
+    if (this.player?.applyProgression) {
+      this.player.applyProgression(this.progression.level);
+    }
+    this.ensureBlueprints();
+  }
+
+  awardXp(amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const leveled = this.progression.addXp(amount);
+    if (leveled) {
+      this.notifications.push(`Level ${this.progression.level} reached`);
+      this.applyProgression();
+    }
+  }
+
+  resolveQuestCompletions() {
+    this.quests.quests.forEach((quest) => {
+      if (quest.completed && !quest.notified) {
+        quest.notified = true;
+        this.notifications.push(`Quest complete: ${quest.label}`);
+        this.awardXp(quest.rewardXp);
+      }
+    });
+  }
+
+  selectBuild(id) {
+    if (!this.isBuildUnlocked(id)) {
+      const required = BUILDINGS[id]?.unlockLevel ?? 1;
+      this.notifications.push(`Requires level ${required}`);
+      return;
+    }
+    this.build.selected = id;
+    const slotIndex = this.inventory.slots.findIndex((slot) => slot.id === id);
+    if (slotIndex >= 0) this.ui.activeHotbarIndex = slotIndex;
+    this.notifications.push(`Selected ${id}`);
+  }
+
+  useActiveItem() {
+    const slot = this.inventory.slots[this.ui.activeHotbarIndex];
+    if (!slot || !slot.id) return;
+    const item = ITEMS[slot.id];
+    if (item?.edible) {
+      this.player.consume(item.edible);
+      slot.count -= 1;
+      if (slot.count <= 0) {
+        slot.id = null;
+        slot.count = 0;
+      }
+      this.notifications.push(`Ate ${item.name}`);
+    }
+  }
+
+  refreshEquipmentFromInventory() {
+    const hasAxe = this.inventory.slots.some((slot) => slot.id === "stone_axe");
+    const hasPick = this.inventory.slots.some((slot) => slot.id === "stone_pick");
+    const hasBackpack = this.inventory.slots.some((slot) => slot.id === "backpack");
+    this.gear.tool = hasPick ? "stone_pick" : hasAxe ? "stone_axe" : "none";
+    this.gear.backpack = hasBackpack;
+    this.inventory.capacityBonus = hasBackpack ? 10 : 0;
+  }
+
+  syncBuildSelection() {
+    const slot = this.inventory.slots[this.ui.activeHotbarIndex];
+    if (slot && BUILDINGS[slot.id] && this.isBuildUnlocked(slot.id)) {
+      this.build.selected = slot.id;
+    }
+  }
+
+  onCraft(output) {
+    this.awardXp(PROGRESSION.xp.craft);
+    this.notifications.push(`Crafted ${output.id}`);
+    this.quests.onCraft(output.id, output.count);
+    this.resolveQuestCompletions();
+  }
+
+  toggleOverlay(name, show) {
+    const element = this.overlays[name];
+    if (!element) return;
+    element.classList.toggle("visible", show);
+    element.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+
+  startGame() {
+    const seedValue = this.seedControls.sanitizeSeed();
+    this.resetWorld(seedValue);
+    this.mode = "playing";
+    this.toggleOverlay("menu", false);
+    this.toggleOverlay("pause", false);
+  }
+
+  togglePause() {
+    if (this.mode === "playing") {
+      this.mode = "paused";
+      this.toggleOverlay("pause", true);
+    } else if (this.mode === "paused") {
+      this.mode = "playing";
+      this.toggleOverlay("pause", false);
+    }
+  }
+
+  updateInteraction() {
+    const found = this.world.findNearestResource(this.player.x, this.player.y, CONFIG.gatherRange);
+    if (found) {
+      this.interaction.target = found.entity;
+      this.interaction.inRange = true;
+      this.interaction.dist = found.dist;
+      this.interaction.kind = "resource";
+      return;
+    }
+    const structure = this.world.findNearestStructure(this.player.x, this.player.y, 1.6);
+    if (structure) {
+      this.interaction.target = structure.structure;
+      this.interaction.inRange = true;
+      this.interaction.dist = structure.dist;
+      this.interaction.kind = "structure";
+      return;
+    }
+    this.interaction.target = null;
+    this.interaction.inRange = false;
+    this.interaction.dist = null;
+    this.interaction.kind = null;
+  }
+
+  updateStructureContext() {
+    const radius = 2.2;
+    const structures = this.world.getStructuresInView(
+      this.player.x - radius,
+      this.player.y - radius,
+      this.player.x + radius,
+      this.player.y + radius
+    );
+    let nearCampfire = false;
+    let nearShelter = false;
+    let nearWorkbench = false;
+    let underCanopy = false;
+    structures.forEach((structure) => {
+      const dist = Math.hypot(structure.x - this.player.x, structure.y - this.player.y);
+      if (structure.type === "campfire" && dist < 1.6) nearCampfire = true;
+      if (structure.type === "shelter" && dist < 1.9) nearShelter = true;
+      if (structure.type === "workbench" && dist < 1.6) nearWorkbench = true;
+      const def = BUILDINGS[structure.type];
+      if (def?.canopy) {
+        const minX = structure.originX ?? structure.x - 0.5;
+        const minY = structure.originY ?? structure.y - 0.5;
+        const w = structure.w ?? 1;
+        const h = structure.h ?? 1;
+        if (
+          this.player.x >= minX &&
+          this.player.x <= minX + w &&
+          this.player.y >= minY &&
+          this.player.y <= minY + h
+        ) {
+          underCanopy = true;
+        }
+      }
+    });
+    this.structureContext.nearCampfire = nearCampfire;
+    this.structureContext.nearShelter = nearShelter;
+    this.structureContext.nearWorkbench = nearWorkbench;
+    this.structureContext.underCanopy = underCanopy;
+  }
+
+  attemptGather() {
+    if (this.player.gatherCooldown > 0) {
+      this.notifications.push("Gather cooling down");
+      return;
+    }
+    const found = this.world.findNearestResource(this.player.x, this.player.y, CONFIG.gatherRange);
+    if (!found) {
+      this.notifications.push("No resource in range");
+      return;
+    }
+    let baseYield = 1;
+    if (found.entity.type === "tree" && this.gear.tool === "stone_axe") baseYield = 2;
+    if (found.entity.type === "boulder" && this.gear.tool === "stone_pick") baseYield = 2;
+    const itemId =
+      found.entity.type === "tree"
+        ? "wood"
+        : found.entity.type === "boulder"
+          ? "stone"
+          : "berry";
+    const yieldAmount = itemId === "berry" ? 1 : baseYield;
+    const maxStack = ITEMS[itemId]?.maxStack ?? 32;
+    if (!this.inventory.canAdd(itemId, yieldAmount, maxStack)) {
+      this.notifications.push("Inventory full");
+      return;
+    }
+    found.chunk.removed.add(found.entity.id);
+    if (found.entity.type === "tree") {
+      this.inventory.addItem("wood", yieldAmount, maxStack);
+      this.notifications.push(`Gathered wood +${yieldAmount}`);
+      this.awardXp(PROGRESSION.xp.gather);
+      this.quests.onGather("wood", yieldAmount);
+    } else if (found.entity.type === "boulder") {
+      this.inventory.addItem("stone", yieldAmount, maxStack);
+      this.notifications.push(`Gathered stone +${yieldAmount}`);
+      this.awardXp(PROGRESSION.xp.gather);
+      this.quests.onGather("stone", yieldAmount);
+    } else if (found.entity.type === "berrybush") {
+      this.inventory.addItem("berry", yieldAmount, maxStack);
+      this.notifications.push(`Foraged berries +${yieldAmount}`);
+      this.awardXp(PROGRESSION.xp.forage);
+      this.quests.onGather("berry", yieldAmount);
+    }
+    this.resolveQuestCompletions();
+    this.player.gatherCooldown = CONFIG.gatherCooldown;
+  }
+
+  attemptInteract() {
+    const found = this.world.findNearestStructure(this.player.x, this.player.y, 1.6);
+    if (!found) return false;
+    const { structure } = found;
+    if (structure.type === "campfire") {
+      this.player.consume({ health: 12, stamina: 18, hunger: 6 });
+      this.notifications.push("Warmed up at the campfire");
+      return true;
+    }
+    if (structure.type === "shelter") {
+      this.player.consume({ stamina: 30, hunger: 4 });
+      this.notifications.push("Rested in the shelter");
+      return true;
+    }
+    if (structure.type === "workbench") {
+      this.ui.inventoryOpen = true;
+      this.mode = "inventory";
+      this.notifications.push("Workbench ready");
+      return true;
+    }
+    if (structure.type === "hut") {
+      this.player.consume({ health: 20, stamina: 40, hunger: 8 });
+      this.timeOfDay = 0.25;
+      this.notifications.push("Slept until morning");
+      return true;
+    }
+    return false;
+  }
+
+  attemptBuild() {
+    if (!this.build.active) {
+      if (!this.attemptInteract()) {
+        this.attemptGather();
+      }
+      return;
+    }
+    const preview = this.build.preview;
+    if (!preview || !preview.valid) {
+      this.notifications.push(preview?.reason || "Can't build here");
+      return;
+    }
+    const blueprint = BUILDINGS[this.build.selected];
+    if (!blueprint) {
+      this.notifications.push("No blueprint selected");
+      return;
+    }
+    if (!this.isBuildUnlocked(this.build.selected)) {
+      this.notifications.push(`Requires level ${blueprint.unlockLevel}`);
+      return;
+    }
+    if (!this.inventory.canAfford(blueprint.cost)) {
+      this.notifications.push("Need more resources");
+      return;
+    }
+    this.inventory.spend(blueprint.cost);
+    this.world.addStructure(this.build.selected, preview.originX, preview.originY, preview.w, preview.h);
+    this.notifications.push(`Built ${this.build.selected}`);
+    this.awardXp(PROGRESSION.xp.build);
+    this.quests.onBuild(this.build.selected);
+    this.resolveQuestCompletions();
+  }
+
+  update(dt) {
+    if (this.mode !== "playing") return;
+    this.player.updateCooldown(dt);
+    this.refreshEquipmentFromInventory();
+    this.syncBuildSelection();
+    this.updateStructureContext();
+    this.player.updateMovement(dt, this.input, this.world, this.structureContext);
+    this.updateStructureContext();
+    this.player.updateNeeds(dt, this.structureContext);
+    this.updateInteraction();
+    const blueprint = BUILDINGS[this.build.selected];
+    const unlocked = this.isBuildUnlocked(this.build.selected);
+    const requiredLevel = blueprint?.unlockLevel ?? 1;
+    this.build.updatePreview(this.player, this.world, blueprint, unlocked, requiredLevel);
+    this.weather.update(dt);
+    this.notifications.update(dt);
+    this.timeOfDay = (this.timeOfDay + dt / 240) % 1;
+    if (this.input.wasPressed("e")) this.attemptBuild();
+    if (this.input.wasPressed("r")) this.useActiveItem();
+    this.input.clearPressed();
+    const smooth = 1 - Math.pow(0.001, dt * 4.5);
+    this.camera.x = lerp(this.camera.x, this.player.x, smooth);
+    this.camera.y = lerp(this.camera.y, this.player.y, smooth);
+  }
+
+  render() {
+    this.refreshEquipmentFromInventory();
+    const renderMeta = this.renderer.render(this);
+    const debugLines = this.renderer.getDebugLines(this);
+    if (this.ui.showHud) {
+      this.hudRenderer.draw(this, debugLines);
+    }
+    return renderMeta;
+  }
+
+  advanceTime(ms) {
+    this.externalTime = true;
+    const steps = Math.max(1, Math.round(ms / (1000 / 60)));
+    const dt = 1 / 60;
+    for (let i = 0; i < steps; i += 1) {
+      this.update(dt);
+    }
+    this.render();
+  }
+
+  renderToText() {
+    const scale = Math.min(this.view.width / 960, this.view.height / 540);
+    const tileSize = CONFIG.baseTileSize * clamp(scale, 0.8, 1.2);
+    const bounds = this.renderer.getViewBounds(this, tileSize);
+    const chunks = this.world.getChunksInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
+    const resources = [];
+    for (const chunk of chunks) {
+      for (const entity of chunk.entities) {
+        if (chunk.removed.has(entity.id)) continue;
+        if (
+          entity.x < bounds.minX ||
+          entity.x > bounds.maxX ||
+          entity.y < bounds.minY ||
+          entity.y > bounds.maxY
+        ) {
+          continue;
+        }
+        resources.push({
+          type: entity.type,
+          x: Number(entity.x.toFixed(2)),
+          y: Number(entity.y.toFixed(2)),
+        });
+      }
+    }
+    const structures = this.world.getStructuresInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
+    const biome = this.world.getBiome(Math.floor(this.player.x), Math.floor(this.player.y));
+    const biomeBandName = this.world.biomeBand(Math.floor(this.player.x), Math.floor(this.player.y));
+    const payload = {
+      mode: this.mode,
+      seed: this.seed,
+      coord: "Origin (0,0) near initial spawn. +x east, +y south. Units = tiles.",
+      timeOfDay: Number(this.timeOfDay.toFixed(3)),
+      biome,
+      biomeBand: biomeBandName,
+      weather: {
+        type: this.weather.type,
+        timeLeft: Number(this.weather.timer.toFixed(1)),
+      },
+      player: {
+        x: Number(this.player.x.toFixed(2)),
+        y: Number(this.player.y.toFixed(2)),
+        vx: Number(this.player.vx.toFixed(2)),
+        vy: Number(this.player.vy.toFixed(2)),
+        hunger: Number(this.player.hunger.toFixed(1)),
+        health: Number(this.player.health.toFixed(1)),
+        stamina: Number(this.player.stamina.toFixed(1)),
+        maxHunger: Number(this.player.maxHunger.toFixed(1)),
+        maxHealth: Number(this.player.maxHealth.toFixed(1)),
+        maxStamina: Number(this.player.maxStamina.toFixed(1)),
+        gatherCooldown: Number(this.player.gatherCooldown.toFixed(2)),
+      },
+      inventory: {
+        wood: this.inventory.getCount("wood"),
+        stone: this.inventory.getCount("stone"),
+        berries: this.inventory.getCount("berry"),
+        planks: this.inventory.getCount("planks"),
+        capacity: this.inventory.capacity(),
+        used: this.inventory.count(),
+      },
+      progression: {
+        level: this.progression.level,
+        xp: this.progression.xp,
+        xpToNext: this.progression.xpToNext,
+      },
+      gear: { ...this.gear },
+      structureContext: { ...this.structureContext },
+      view: {
+        camera: {
+          x: Number(this.camera.x.toFixed(2)),
+          y: Number(this.camera.y.toFixed(2)),
+        },
+        bounds: {
+          minX: Number(bounds.minX.toFixed(2)),
+          maxX: Number(bounds.maxX.toFixed(2)),
+          minY: Number(bounds.minY.toFixed(2)),
+          maxY: Number(bounds.maxY.toFixed(2)),
+        },
+      },
+      resources: resources.slice(0, 60),
+      structures: structures.slice(0, 40).map((structure) => ({
+        type: structure.type,
+        x: Number(structure.x.toFixed(2)),
+        y: Number(structure.y.toFixed(2)),
+        originX: Number((structure.originX ?? structure.x - 0.5).toFixed(2)),
+        originY: Number((structure.originY ?? structure.y - 0.5).toFixed(2)),
+        w: structure.w ?? 1,
+        h: structure.h ?? 1,
+      })),
+      interaction: this.interaction.target
+        ? {
+            type: this.interaction.target.type,
+            x: Number(this.interaction.target.x.toFixed(2)),
+            y: Number(this.interaction.target.y.toFixed(2)),
+            inRange: this.interaction.inRange,
+            dist: Number((this.interaction.dist ?? 0).toFixed(2)),
+            kind: this.interaction.kind,
+          }
+        : null,
+      build: {
+        active: this.build.active,
+        selected: this.build.selected,
+        preview: this.build.preview
+          ? {
+              x: Number(this.build.preview.x.toFixed(2)),
+              y: Number(this.build.preview.y.toFixed(2)),
+              originX: Number(this.build.preview.originX.toFixed(2)),
+              originY: Number(this.build.preview.originY.toFixed(2)),
+              w: this.build.preview.w,
+              h: this.build.preview.h,
+              valid: this.build.preview.valid,
+              reason: this.build.preview.reason,
+            }
+          : null,
+      },
+      notifications: this.notifications.items.map((note) => note.text),
+      quests: this.quests.getActive(3).map((quest) => ({
+        id: quest.id,
+        label: quest.label,
+        progress: quest.progress,
+        target: quest.target,
+      })),
+      debug: this.debug.enabled,
+      ui: { ...this.ui },
+      chat: {
+        open: this.chat.open,
+        input: this.chat.input,
+        messages: this.chat.messages.slice(-5),
+      },
+      craftingGrid: this.craftingGrid.map((slot) => ({ ...slot })),
+      slots: this.inventory.slots.map((slot) => ({ ...slot })),
+    };
+    return JSON.stringify(payload);
+  }
+}

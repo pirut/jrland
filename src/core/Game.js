@@ -10,6 +10,7 @@ import { Progression } from "../systems/Progression.js";
 import { QuestSystem } from "../systems/QuestSystem.js";
 import { CreatureSystem } from "../systems/CreatureSystem.js";
 import { WorldEventSystem } from "../systems/WorldEventSystem.js";
+import { StorageSystem } from "../systems/StorageSystem.js";
 import { Renderer } from "../render/Renderer.js";
 import { HudRenderer } from "../render/HudRenderer.js";
 import { InputController } from "../core/InputController.js";
@@ -40,6 +41,7 @@ export class Game {
     this.quests = new QuestSystem();
     this.creatures = new CreatureSystem(this.world);
     this.worldEvents = new WorldEventSystem();
+    this.storage = new StorageSystem();
     this.input = new InputController();
     this.renderer = new Renderer(ctx);
     this.hudRenderer = new HudRenderer(ctx);
@@ -87,6 +89,7 @@ export class Game {
     this.build.reset();
     this.creatures.reset();
     this.worldEvents.reset();
+    this.storage.reset();
     this.notifications.items = [];
     this.chat.messages = [];
     this.chat.input = "";
@@ -165,6 +168,18 @@ export class Game {
     return this.timeOfDay < 0.18 || this.timeOfDay > 0.82;
   }
 
+  screenToWorld(screenX, screenY) {
+    const scale = Math.min(this.view.width / 960, this.view.height / 540);
+    const tileSize = CONFIG.baseTileSize * clamp(scale, 0.8, 1.2);
+    const bounds = this.renderer.getViewBounds(this, tileSize);
+    return {
+      x: bounds.minX + screenX / tileSize,
+      y: bounds.minY + screenY / tileSize,
+      tileSize,
+      bounds,
+    };
+  }
+
   awardXp(amount) {
     if (!Number.isFinite(amount) || amount <= 0) return;
     const leveled = this.progression.addXp(amount);
@@ -194,6 +209,10 @@ export class Game {
     const slotIndex = this.inventory.slots.findIndex((slot) => slot.id === id);
     if (slotIndex >= 0) this.ui.activeHotbarIndex = slotIndex;
     this.notifications.push(`Selected ${id}`);
+  }
+
+  setMoveTarget(worldX, worldY) {
+    this.player.moveTarget = { x: worldX, y: worldY };
   }
 
   useActiveItem() {
@@ -443,15 +462,17 @@ export class Game {
       return true;
     }
     if (structure.type === "workbench") {
+      this.storage.close();
       this.ui.inventoryOpen = true;
       this.mode = "inventory";
       this.notifications.push("Workbench ready");
       return true;
     }
     if (structure.type === "storage_crate") {
+      this.storage.open(structure.id);
       this.ui.inventoryOpen = true;
       this.mode = "inventory";
-      this.notifications.push("Storage ready");
+      this.notifications.push("Storage opened");
       return true;
     }
     if (structure.type === "wood_gate") {
@@ -521,7 +542,10 @@ export class Game {
     const blueprint = BUILDINGS[this.build.selected];
     const unlocked = this.isBuildUnlocked(this.build.selected);
     const requiredLevel = blueprint?.unlockLevel ?? 1;
-    this.build.updatePreview(this.player, this.world, blueprint, unlocked, requiredLevel);
+    const pointer = this.ui.pointerInCanvas
+      ? { x: this.ui.mouseWorldX, y: this.ui.mouseWorldY }
+      : null;
+    this.build.updatePreview(this.player, this.world, blueprint, unlocked, requiredLevel, pointer);
     this.weather.update(dt);
     this.notifications.update(dt);
     const wasNight = this.isNight;
@@ -617,6 +641,12 @@ export class Game {
         y: Number(this.player.y.toFixed(2)),
         vx: Number(this.player.vx.toFixed(2)),
         vy: Number(this.player.vy.toFixed(2)),
+        moveTarget: this.player.moveTarget
+          ? {
+              x: Number(this.player.moveTarget.x.toFixed(2)),
+              y: Number(this.player.moveTarget.y.toFixed(2)),
+            }
+          : null,
         hunger: Number(this.player.hunger.toFixed(1)),
         health: Number(this.player.health.toFixed(1)),
         stamina: Number(this.player.stamina.toFixed(1)),
@@ -636,6 +666,12 @@ export class Game {
         capacity: this.inventory.capacity(),
         used: this.inventory.count(),
       },
+      storage: this.storage.isOpen()
+        ? {
+            activeId: this.storage.activeId,
+            slots: this.storage.getActiveContainer()?.slots.map((slot) => ({ ...slot })) ?? [],
+          }
+        : null,
       progression: {
         level: this.progression.level,
         xp: this.progression.xp,

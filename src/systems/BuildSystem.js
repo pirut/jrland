@@ -17,7 +17,7 @@ export class BuildSystem {
     this.rotation = (this.rotation + 1) % 4;
   }
 
-  updatePreview(player, world, blueprint, unlocked, requiredLevel) {
+  updatePreview(player, world, blueprint, unlocked, requiredLevel, pointer) {
     if (!this.active || !blueprint) {
       this.preview = null;
       return;
@@ -26,14 +26,21 @@ export class BuildSystem {
     const rotated = this.rotation % 2 === 1;
     const footprintW = rotated ? footprint.h : footprint.w;
     const footprintH = rotated ? footprint.w : footprint.h;
-    let dirX = player.facingX;
-    let dirY = player.facingY;
-    if (Math.abs(dirX) + Math.abs(dirY) < 0.01) {
-      dirX = 0;
-      dirY = 1;
+    let targetX;
+    let targetY;
+    if (pointer) {
+      targetX = Math.floor(pointer.x);
+      targetY = Math.floor(pointer.y);
+    } else {
+      let dirX = player.facingX;
+      let dirY = player.facingY;
+      if (Math.abs(dirX) + Math.abs(dirY) < 0.01) {
+        dirX = 0;
+        dirY = 1;
+      }
+      targetX = Math.floor(player.x + dirX * 1.4);
+      targetY = Math.floor(player.y + dirY * 1.4);
     }
-    const targetX = Math.floor(player.x + dirX * 1.4);
-    const targetY = Math.floor(player.y + dirY * 1.4);
     const originX = targetX - Math.floor(footprintW / 2);
     const originY = targetY - Math.floor(footprintH / 2);
     const centerX = originX + footprintW / 2;

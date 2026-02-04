@@ -90,7 +90,7 @@ export class InventoryUI {
     });
   }
 
-  handleClick(game, x, y) {
+  handleClick(game, x, y, button = 0) {
     const layout = this.getLayout(game);
     const inside =
       x >= layout.panel.x &&
@@ -150,6 +150,21 @@ export class InventoryUI {
         this.cursor = this.handleSlotClick(game.craftingGrid[i], this.cursor);
         game.ui.cursorItem = this.cursor;
         return;
+      }
+    }
+
+    if (layout.hasStorage) {
+      const storage = game.storage.getActiveContainer();
+      if (storage) {
+        for (let i = 0; i < storage.slots.length; i += 1) {
+          const rect = layout.storageSlots[i];
+          if (!rect) continue;
+          if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+            this.cursor = this.handleSlotClick(storage.slots[i], this.cursor);
+            game.ui.cursorItem = this.cursor;
+            return;
+          }
+        }
       }
     }
     game.ui.cursorItem = this.cursor;

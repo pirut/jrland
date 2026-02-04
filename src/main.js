@@ -1,5 +1,6 @@
 import { Game } from "./core/Game.js";
 import { CONFIG } from "./config.js";
+import { getHotbarLayout } from "./ui/hotbarLayout.js";
 
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
@@ -106,6 +107,51 @@ function toggleFullscreen() {
   }
 }
 
+function getPointerCoords(event) {
+  const rect = canvas.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * game.view.width;
+  const y = ((event.clientY - rect.top) / rect.height) * game.view.height;
+  return { x, y };
+}
+
+function handleBuildCatalogClick(x, y) {
+  const layout = game.ui.buildCatalogLayout;
+  if (!layout) return false;
+  if (
+    x < layout.panel.x ||
+    x > layout.panel.x + layout.panel.w ||
+    y < layout.panel.y ||
+    y > layout.panel.y + layout.panel.h
+  ) {
+    return false;
+  }
+  const hit = layout.lines.find(
+    (line) =>
+      !line.header &&
+      x >= line.bounds.x &&
+      x <= line.bounds.x + line.bounds.w &&
+      y >= line.bounds.y &&
+      y <= line.bounds.y + line.bounds.h
+  );
+  if (hit && !hit.locked) {
+    game.selectBuild(hit.id);
+  }
+  return true;
+}
+
+function handleHotbarClick(x, y) {
+  const layout = getHotbarLayout(game);
+  for (let i = 0; i < layout.slots.length; i += 1) {
+    const slot = layout.slots[i];
+    if (x >= slot.x && x <= slot.x + slot.w && y >= slot.y && y <= slot.y + slot.h) {
+      game.ui.activeHotbarIndex = i;
+      game.syncBuildSelection();
+      return true;
+    }
+  }
+  return false;
+}
+
 startBtn.addEventListener("click", () => game.startGame());
 startBtn.addEventListener("pointerdown", () => game.startGame());
 resumeBtn.addEventListener("click", () => game.togglePause());
@@ -125,6 +171,7 @@ window.addEventListener("keydown", (event) => {
   if (game.ui.inventoryOpen) {
     if (event.key === "Escape" || event.key.toLowerCase() === "i") {
       game.ui.inventoryOpen = false;
+      game.storage.close();
       game.mode = "playing";
     }
     event.preventDefault();
@@ -143,16 +190,21 @@ window.addEventListener("keydown", (event) => {
   }
   if (key === "i" && game.mode === "playing") {
     game.ui.inventoryOpen = !game.ui.inventoryOpen;
+    if (!game.ui.inventoryOpen) {
+      game.storage.close();
+    }
     game.mode = game.ui.inventoryOpen ? "inventory" : "playing";
     return;
   }
   if (key === "enter" && game.mode === "playing") {
     game.ui.inventoryOpen = true;
+    game.storage.close();
     game.mode = "inventory";
     return;
   }
   if (key === "escape" && game.ui.inventoryOpen) {
     game.ui.inventoryOpen = false;
+    game.storage.close();
     game.mode = "playing";
     return;
   }
@@ -222,21 +274,87 @@ window.addEventListener("keyup", (event) => {
   game.input.release(key);
 });
 
+canvas.addEventListener("mouseenter", () => {
+  game.ui.pointerInCanvas = true;
+});
+
+canvas.addEventListener("mouseleave", () => {
+  game.ui.pointerInCanvas = false;
+});
+
 canvas.addEventListener("mousemove", (event) => {
-  if (!game.ui.inventoryOpen) return;
   const rect = canvas.getBoundingClientRect();
   const x = ((event.clientX - rect.left) / rect.width) * game.view.width;
   const y = ((event.clientY - rect.top) / rect.height) * game.view.height;
   game.ui.mouseX = x;
   game.ui.mouseY = y;
+  const world = game.screenToWorld(x, y);
+  game.ui.mouseWorldX = world.x;
+  game.ui.mouseWorldY = world.y;
 });
 
 canvas.addEventListener("mousedown", (event) => {
-  if (!game.ui.inventoryOpen) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = ((event.clientX - rect.left) / rect.width) * game.view.width;
-  const y = ((event.clientY - rect.top) / rect.height) * game.view.height;
-  game.inventoryUI.handleClick(game, x, y);
+  const { x, y } = getPointerCoords(event);
+  game.ui.mouseX = x;
+  game.ui.mouseY = y;
+  const world = game.screenToWorld(x, y);
+  game.ui.mouseWorldX = world.x;
+  game.ui.mouseWorldY = world.y;
+
+  if (game.ui.inventoryOpen) {
+    game.inventoryUI.handleClick(game, x, y, event.button);
+    return;
+  }
+
+  if (game.mode !== "playing") return;
+
+  if (game.build.active && handleBuildCatalogClick(x, y)) {
+    return;
+  }
+
+  if (handleHotbarClick(x, y)) {
+    return;
+  }
+
+  if (game.build.active) {
+    if (event.button === 2) {
+      game.build.active = false;
+      game.notifications.push("Build mode off");
+      return;
+    }
+    if (event.button === 0) {
+      game.attemptBuild();
+      return;
+    }
+  }
+
+  if (event.button === 2) {
+    if (game.interaction.kind === "enemy") {
+      game.attemptAttack();
+    } else if (!game.attemptInteract()) {
+      game.attemptGather();
+    }
+    return;
+  }
+
+  if (event.button === 0) {
+    if (game.world.tileType(Math.floor(world.x), Math.floor(world.y)) !== "water") {
+      game.setMoveTarget(world.x, world.y);
+    }
+  }
+});
+
+canvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+});
+
+canvas.addEventListener("wheel", (event) => {
+  if (game.mode !== "playing" || game.ui.inventoryOpen) return;
+  const delta = Math.sign(event.deltaY);
+  if (delta === 0) return;
+  const next = (game.ui.activeHotbarIndex + delta + 9) % 9;
+  game.ui.activeHotbarIndex = next;
+  game.syncBuildSelection();
 });
 
 window.addEventListener("fullscreenchange", resizeCanvas);

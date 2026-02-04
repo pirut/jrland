@@ -411,6 +411,28 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  drawMoveTarget(game, tileSize, bounds) {
+    const target = game.player.moveTarget;
+    if (!target) return;
+    if (
+      target.x < bounds.minX ||
+      target.x > bounds.maxX ||
+      target.y < bounds.minY ||
+      target.y > bounds.maxY
+    ) {
+      return;
+    }
+    const px = (target.x - bounds.minX) * tileSize;
+    const py = (target.y - bounds.minY) * tileSize;
+    this.ctx.save();
+    this.ctx.strokeStyle = "rgba(47,111,79,0.6)";
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.arc(px, py, tileSize * 0.35, 0, Math.PI * 2);
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
   drawPlayer(game, tileSize, bounds) {
     const px = (game.player.x - bounds.minX) * tileSize;
     const py = (game.player.y - bounds.minY) * tileSize;
@@ -481,6 +503,14 @@ export class Renderer {
     this.ctx.fillRect(0, 0, game.view.width, game.view.height);
     this.ctx.fillStyle = `rgba(234, 173, 96, ${twilight * 0.18})`;
     this.ctx.fillRect(0, 0, game.view.width, game.view.height);
+    if (game.isNightTime()) {
+      this.ctx.fillStyle = `rgba(14, 22, 32, ${0.08 + darkness * 0.2})`;
+      this.ctx.fillRect(0, 0, game.view.width, game.view.height);
+    }
+    if (game.worldEvents?.activeEvent) {
+      this.ctx.fillStyle = "rgba(96, 46, 42, 0.12)";
+      this.ctx.fillRect(0, 0, game.view.width, game.view.height);
+    }
   }
 
   render(game) {
@@ -491,6 +521,7 @@ export class Renderer {
     this.drawStructuresBase(game, tileSize, bounds);
     this.drawCreatures(game, tileSize, bounds);
     this.drawBuildPreview(game, tileSize, bounds);
+    this.drawMoveTarget(game, tileSize, bounds);
     this.drawInteractionHighlight(game, tileSize, bounds);
     this.drawPlayer(game, tileSize, bounds);
     this.drawStructuresCanopy(game, tileSize, bounds);

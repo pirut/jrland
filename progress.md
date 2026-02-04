@@ -177,3 +177,15 @@ TODOs (next agent):
 - Add explicit UI/controls for selecting new builds (lean-to, storage crate, walls/gate) beyond hotbar slots.
 - Add a simple storage UI for storage crates (separate container inventory) instead of capacity boost.
 - Add ambient night visuals (campfire glow radius, subtle tint) tied to world events.
+
+Updates (2026-02-04, UI + mouse support):
+- Added mouse controls: left-click to move, right-click to interact/gather/attack, scroll wheel cycles hotbar, click hotbar slots.
+- Build catalog is now clickable with hover states; build preview snaps to mouse tile when build mode is active.
+- Added storage container UI panel with separate slots when a storage crate is opened.
+- Added item tooltips on hover in inventory and a move-target ring in-world.
+- Updated menu controls to match new mouse-first input flow.
+- Added subtle night/event overlays for atmosphere.
+
+Test log:
+- Ran Playwright client after mouse/UI updates; screenshots/state captured in output/web-game (latest: shot-2-1770218067667.png, state-2-1770218067667.json).
+- Ran Playwright client to capture inventory overlay layout (latest: shot-1-1770218282656.png, state-1-1770218282656.json).

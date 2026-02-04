@@ -2,6 +2,7 @@ import { CONFIG, BUILDINGS } from "../config.js";
 import { clamp } from "../utils/math.js";
 import { drawItemIcon } from "./icons.js";
 import { getInventoryLayout } from "./inventoryLayout.js";
+import { getHotbarLayout } from "./hotbarLayout.js";
 
 export class StatusBars {
   constructor(ctx) {
@@ -100,15 +101,11 @@ export class Hotbar {
 
   draw(game) {
     if (!game.ui.showHotbar) return;
-    const slotSize = 36;
-    const gap = 6;
-    const totalSlots = 9;
-    const barWidth = totalSlots * slotSize + (totalSlots - 1) * gap;
-    const startX = (game.view.width - barWidth) / 2;
-    const startY = game.view.height - slotSize - 18;
+    const layout = getHotbarLayout(game);
+    const { slotSize, totalSlots, startX, startY } = layout;
     this.ctx.save();
     for (let i = 0; i < totalSlots; i += 1) {
-      const x = startX + i * (slotSize + gap);
+      const x = startX + i * (layout.slotSize + layout.gap);
       const active = game.ui.activeHotbarIndex === i;
       this.ctx.fillStyle = "rgba(255,255,255,0.7)";
       this.ctx.fillRect(x, startY, slotSize, slotSize);
@@ -202,8 +199,10 @@ export class BuildCatalog {
   }
 
   draw(game) {
-    if (!game.ui.showBuildCatalog) return;
-    if (!game.build.active) return;
+    if (!game.ui.showBuildCatalog || !game.build.active) {
+      game.ui.buildCatalogLayout = null;
+      return;
+    }
     const categoryOrder = ["utility", "housing", "defense"];
     const entries = [];
     categoryOrder.forEach((category) => {
@@ -246,7 +245,7 @@ export class BuildCatalog {
       buildIndex += 1;
       return line;
     });
-    const header = "Build Catalog (Q rotate)";
+    const header = "Build Catalog (click to select, Q rotate)";
     const width =
       Math.max(
         this.ctx.measureText(header).width,
@@ -259,12 +258,37 @@ export class BuildCatalog {
     this.ctx.strokeRect(x, y, width, height);
     this.ctx.fillStyle = "rgba(15,20,23,0.75)";
     this.ctx.fillText(header, x + padding, y + padding);
+    game.ui.buildCatalogLayout = {
+      panel: { x, y, w: width, h: height },
+      lines: [],
+    };
     lines.forEach((line, index) => {
       const lineY = y + padding + (index + 1) * lineHeight;
+      game.ui.buildCatalogLayout.lines.push({
+        id: line.id,
+        header: line.header,
+        locked: line.locked,
+        bounds: {
+          x: x + 4,
+          y: lineY - 10,
+          w: width - 8,
+          h: lineHeight,
+        },
+      });
       if (line.header) {
         this.ctx.fillStyle = "rgba(15,20,23,0.55)";
         this.ctx.fillText(line.text, x + padding, lineY);
         return;
+      }
+      const hover =
+        game.ui.pointerInCanvas &&
+        game.ui.mouseX >= x + 4 &&
+        game.ui.mouseX <= x + width - 4 &&
+        game.ui.mouseY >= lineY - 10 &&
+        game.ui.mouseY <= lineY - 10 + lineHeight;
+      if (hover) {
+        this.ctx.fillStyle = "rgba(47,111,79,0.15)";
+        this.ctx.fillRect(x + 4, lineY - 10, width - 8, lineHeight);
       }
       if (line.selected) {
         this.ctx.fillStyle = "rgba(47,111,79,0.2)";
@@ -304,7 +328,10 @@ export class InventoryReadout {
           ? "Spear"
           : "None";
     const armor = game.gear.armor === "hide_armor" ? "Hide" : "None";
-    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Meat ${game.inventory.getCount("meat")}  |  Cooked ${game.inventory.getCount("cooked_meat")}  |  Hide ${game.inventory.getCount("hide")}  |  Carry ${capacity}  |  Axe ${axe}  |  Pick ${pick}  |  Weapon ${weapon}  |  Armor ${armor}`;
+    const storageBonus = game.structureContext.storageBonus
+      ? `  |  Storage +${game.structureContext.storageBonus}`
+      : "";
+    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Meat ${game.inventory.getCount("meat")}  |  Cooked ${game.inventory.getCount("cooked_meat")}  |  Hide ${game.inventory.getCount("hide")}  |  Carry ${capacity}${storageBonus}  |  Axe ${axe}  |  Pick ${pick}  |  Weapon ${weapon}  |  Armor ${armor}`;
     this.ctx.save();
     this.ctx.font = "12px 'Manrope', sans-serif";
     const width = this.ctx.measureText(text).width + 16;
@@ -401,6 +428,10 @@ export class InventoryOverlay {
     this.ctx.fillText("Crafting", layout.craftX, layout.craftY - 10);
     this.ctx.font = "12px 'Manrope', sans-serif";
     this.ctx.fillText("Output", layout.outputSlot.x, layout.outputSlot.y - 6);
+    if (layout.hasStorage) {
+      this.ctx.font = "12px 'Manrope', sans-serif";
+      this.ctx.fillText("Storage", layout.storageX, layout.storageY - 10);
+    }
 
     game.inventory.slots.forEach((slot, index) => {
       const rect = layout.slots[index];
@@ -496,6 +527,32 @@ export class InventoryOverlay {
     this.ctx.fillText(`Weapon: ${weaponLabel}`, statsX + 320, statsLine3Y);
     this.ctx.fillText(`Armor: ${armorLabel}`, statsX + 520, statsLine3Y);
 
+    if (layout.hasStorage) {
+      const storage = game.storage.getActiveContainer();
+      if (storage) {
+        storage.slots.forEach((slot, index) => {
+          const rect = layout.storageSlots[index];
+          if (!rect) return;
+          this.ctx.fillStyle = "rgba(255,255,255,0.8)";
+          this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+          this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+          this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+          if (slot.id) {
+            drawItemIcon(this.ctx, slot.id, rect.x + 6, rect.y + 6, 2);
+            if (slot.count > 1) {
+              this.ctx.fillStyle = "rgba(15,20,23,0.75)";
+              this.ctx.fillText(String(slot.count), rect.x + 18, rect.y + 28);
+            }
+          }
+        });
+      }
+    }
+
+    const hover = this.getHoverSlot(game, layout, output);
+    if (hover) {
+      this.drawTooltip(hover, game.ui.mouseX, game.ui.mouseY);
+    }
+
     if (game.ui.cursorItem) {
       drawItemIcon(this.ctx, game.ui.cursorItem.id, game.ui.mouseX - 8, game.ui.mouseY - 8, 2);
       if (game.ui.cursorItem.count > 1) {
@@ -503,6 +560,64 @@ export class InventoryOverlay {
         this.ctx.fillText(String(game.ui.cursorItem.count), game.ui.mouseX + 4, game.ui.mouseY + 12);
       }
     }
+    this.ctx.restore();
+  }
+
+  getHoverSlot(game, layout, output) {
+    const { mouseX, mouseY } = game.ui;
+    const hit = (rect) =>
+      rect && mouseX >= rect.x && mouseX <= rect.x + rect.w && mouseY >= rect.y && mouseY <= rect.y + rect.h;
+
+    for (let i = 0; i < game.inventory.slots.length; i += 1) {
+      const rect = layout.slots[i];
+      if (!rect || !hit(rect)) continue;
+      const slot = game.inventory.slots[i];
+      if (!slot?.id) return null;
+      return { id: slot.id, count: slot.count };
+    }
+
+    for (let i = 0; i < game.craftingGrid.length; i += 1) {
+      const rect = layout.craftSlots[i];
+      if (!rect || !hit(rect)) continue;
+      const slot = game.craftingGrid[i];
+      if (!slot?.id) return null;
+      return { id: slot.id, count: slot.count };
+    }
+
+    if (hit(layout.outputSlot) && output?.id) {
+      return { id: output.id, count: output.count };
+    }
+
+    if (layout.hasStorage) {
+      const storage = game.storage.getActiveContainer();
+      if (storage) {
+        for (let i = 0; i < storage.slots.length; i += 1) {
+          const rect = layout.storageSlots[i];
+          if (!rect || !hit(rect)) continue;
+          const slot = storage.slots[i];
+          if (!slot?.id) return null;
+          return { id: slot.id, count: slot.count };
+        }
+      }
+    }
+    return null;
+  }
+
+  drawTooltip(item, x, y) {
+    if (!item?.id) return;
+    const text = `${item.id.replace(/_/g, " ")}${item.count > 1 ? ` x${item.count}` : ""}`;
+    this.ctx.save();
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    const width = this.ctx.measureText(text).width + 12;
+    const height = 18;
+    const drawX = x + 14;
+    const drawY = y + 14;
+    this.ctx.fillStyle = "rgba(20, 26, 30, 0.8)";
+    this.ctx.fillRect(drawX, drawY, width, height);
+    this.ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    this.ctx.strokeRect(drawX, drawY, width, height);
+    this.ctx.fillStyle = "rgba(255,255,255,0.85)";
+    this.ctx.fillText(text, drawX + 6, drawY + 12);
     this.ctx.restore();
   }
 }

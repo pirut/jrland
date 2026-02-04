@@ -14,6 +14,10 @@ export class UIState {
     this.cursorItem = null;
     this.mouseX = 0;
     this.mouseY = 0;
+    this.mouseWorldX = 0;
+    this.mouseWorldY = 0;
+    this.pointerInCanvas = false;
+    this.buildCatalogLayout = null;
   }
 
   toggleInventory() {

@@ -26,6 +26,7 @@ export class Player {
     this.stamina = this.maxStamina;
     this.gatherCooldown = 0;
     this.attackCooldown = 0;
+    this.moveTarget = null;
   }
 
   applyProgression(level) {
@@ -59,6 +60,21 @@ export class Player {
     if (input.isDown("s")) moveY += 1;
     if (input.isDown("a")) moveX -= 1;
     if (input.isDown("d")) moveX += 1;
+    const keyboardActive = Math.abs(moveX) + Math.abs(moveY) > 0.01;
+    if (keyboardActive && this.moveTarget) {
+      this.moveTarget = null;
+    }
+    if (!keyboardActive && this.moveTarget) {
+      const dx = this.moveTarget.x - this.x;
+      const dy = this.moveTarget.y - this.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 0.15) {
+        this.moveTarget = null;
+      } else {
+        moveX = dx / dist;
+        moveY = dy / dist;
+      }
+    }
     const length = Math.hypot(moveX, moveY);
     if (length > 0) {
       moveX /= length;

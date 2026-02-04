@@ -7,8 +7,13 @@ export function getInventoryLayout(game) {
   const craftRows = 2;
   const panelPadding = 20;
   const craftAreaWidth = craftCols * slotSize + (craftCols - 1) * gap + 110;
+  const storageCols = 4;
+  const storageRows = 3;
+  const storageAreaWidth = storageCols * slotSize + (storageCols - 1) * gap + 32;
+  const hasStorage = Boolean(game.storage?.isOpen?.());
   const gridWidth = gridCols * slotSize + (gridCols - 1) * gap;
-  const panelWidth = panelPadding * 2 + gridWidth + craftAreaWidth;
+  const panelWidth =
+    panelPadding * 2 + gridWidth + craftAreaWidth + (hasStorage ? storageAreaWidth : 0);
   const panelHeight = panelPadding * 2 + gridRows * slotSize + (gridRows - 1) * gap + slotSize + gap * 2 + 64;
   const panelX = (game.view.width - panelWidth) / 2;
   const panelY = (game.view.height - panelHeight) / 2;
@@ -21,6 +26,8 @@ export function getInventoryLayout(game) {
   const craftY = gridY + 10;
   const outputX = craftX + craftCols * (slotSize + gap) + 30;
   const outputY = craftY + slotSize + gap;
+  const storageX = craftX + craftAreaWidth + 16;
+  const storageY = craftY;
 
   const slots = [];
   for (let row = 0; row < gridRows; row += 1) {
@@ -55,11 +62,26 @@ export function getInventoryLayout(game) {
     }
   }
 
+  const storageSlots = [];
+  if (hasStorage) {
+    for (let row = 0; row < storageRows; row += 1) {
+      for (let col = 0; col < storageCols; col += 1) {
+        storageSlots[row * storageCols + col] = {
+          x: storageX + col * (slotSize + gap),
+          y: storageY + row * (slotSize + gap),
+          w: slotSize,
+          h: slotSize,
+        };
+      }
+    }
+  }
+
   return {
     panel: { x: panelX, y: panelY, w: panelWidth, h: panelHeight },
     slots,
     craftSlots,
     outputSlot: { x: outputX, y: outputY, w: slotSize, h: slotSize },
+    storageSlots,
     slotSize,
     gap,
     gridX,
@@ -67,5 +89,8 @@ export function getInventoryLayout(game) {
     hotbarY,
     craftX,
     craftY,
+    storageX,
+    storageY,
+    hasStorage,
   };
 }

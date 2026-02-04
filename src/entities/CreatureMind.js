@@ -9,7 +9,7 @@ export class CreatureMind {
   }
 
   update(dt, context) {
-    const { player, world, creatures, isNight } = context;
+    const { player, world, creatures, trails, isNight } = context;
     const creature = this.creature;
     const def = creature.def ?? {};
     const needs = creature.needs;
@@ -37,20 +37,21 @@ export class CreatureMind {
     }
 
     if (criticalHunger) {
-      const foodIntent = this.findFoodIntent(world, creatures, def, hungerRatio);
+      const foodIntent = this.findFoodIntent(world, creatures, trails, def, hungerRatio);
       if (foodIntent) return foodIntent;
     }
 
     if (needsRest || (!def.nocturnal && isNight && energyRatio < 0.6)) {
-      const homeDist = Math.hypot(creature.x - creature.homeX, creature.y - creature.homeY);
+      const homeTarget = creature.den ?? { x: creature.homeX, y: creature.homeY };
+      const homeDist = Math.hypot(creature.x - homeTarget.x, creature.y - homeTarget.y);
       if (homeDist > (def.homeRange ?? 5)) {
-        return { state: "return", target: { x: creature.homeX, y: creature.homeY }, speed: 0.8 };
+        return { state: "return", target: { x: homeTarget.x, y: homeTarget.y }, speed: 0.8 };
       }
       return { state: "rest", target: null, speed: 0 };
     }
 
     if (hungerRatio < (def.hungerThreshold ?? 0.5)) {
-      const foodIntent = this.findFoodIntent(world, creatures, def, hungerRatio);
+      const foodIntent = this.findFoodIntent(world, creatures, trails, def, hungerRatio);
       if (foodIntent) return foodIntent;
     }
 
@@ -65,6 +66,16 @@ export class CreatureMind {
       const prey = this.findPrey(creatures, def, def.huntRange ?? 7);
       if (prey && this.shouldHunt(prey, hungerRatio, packInfo.confidence)) {
         return { state: "hunt", target: prey, speed: 1.1, attackTarget: prey };
+      }
+      const scent = trails?.findNearest(
+        "scent",
+        creature.x,
+        creature.y,
+        def.scentRange ?? 6.5,
+        (trail) => (def.prey ?? ["boar"]).includes(trail.sourceType)
+      );
+      if (scent && hungerRatio < 0.9) {
+        return { state: "track", target: scent, speed: 0.8 };
       }
     }
 
@@ -123,12 +134,22 @@ export class CreatureMind {
     return { x: creature.x + (dx / dist) * 2.2, y: creature.y + (dy / dist) * 2.2 };
   }
 
-  findFoodIntent(world, creatures, def, hungerRatio) {
+  findFoodIntent(world, creatures, trails, def, hungerRatio) {
     const creature = this.creature;
     if (def.diet === "carnivore") {
       const prey = this.findPrey(creatures, def, def.huntRange ?? 7);
       if (prey) {
         return { state: "hunt", target: prey, speed: 1.1, attackTarget: prey };
+      }
+      const scent = trails?.findNearest(
+        "scent",
+        creature.x,
+        creature.y,
+        def.scentRange ?? 6.5,
+        (trail) => (def.prey ?? ["boar"]).includes(trail.sourceType)
+      );
+      if (scent) {
+        return { state: "track", target: scent, speed: 0.8 };
       }
       return null;
     }

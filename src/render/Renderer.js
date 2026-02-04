@@ -299,6 +299,46 @@ export class Renderer {
     });
   }
 
+  drawTrails(game, tileSize, bounds) {
+    const trails = game.creatures?.getTrailsInView?.(bounds) ?? [];
+    if (!trails.length) return;
+    this.ctx.save();
+    trails.forEach((trail) => {
+      const px = (trail.x - bounds.minX) * tileSize;
+      const py = (trail.y - bounds.minY) * tileSize;
+      const fade = 1 - trail.age / trail.ttl;
+      const alpha = 0.15 + fade * 0.45 * trail.strength;
+      const size = trail.type === "scent" ? tileSize * 0.12 : tileSize * 0.16;
+      const color =
+        trail.type === "scent"
+          ? `rgba(90, 126, 120, ${alpha * 0.75})`
+          : `rgba(68, 60, 50, ${alpha})`;
+      this.ctx.fillStyle = color;
+      this.ctx.beginPath();
+      this.ctx.ellipse(px, py, size, size * 0.7, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+    });
+    this.ctx.restore();
+  }
+
+  drawDens(game, tileSize, bounds) {
+    const dens = game.world.getDensInView?.(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY) ?? [];
+    if (!dens.length) return;
+    this.ctx.save();
+    dens.forEach((den) => {
+      const px = (den.x - bounds.minX) * tileSize;
+      const py = (den.y - bounds.minY) * tileSize;
+      const radius = tileSize * 0.3;
+      this.ctx.fillStyle = "rgba(48, 44, 40, 0.9)";
+      this.ctx.beginPath();
+      this.ctx.ellipse(px, py + tileSize * 0.08, radius, radius * 0.6, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.strokeStyle = "rgba(24, 20, 18, 0.8)";
+      this.ctx.stroke();
+    });
+    this.ctx.restore();
+  }
+
   drawCreatures(game, tileSize, bounds) {
     const creatures = game.creatures?.getActiveCreatures?.() ?? [];
     creatures.forEach((creature) => {
@@ -335,6 +375,7 @@ export class Renderer {
         drink: "rgba(96, 148, 168, 0.9)",
         rest: "rgba(140, 140, 140, 0.8)",
         graze: "rgba(118, 174, 118, 0.8)",
+        track: "rgba(96, 130, 126, 0.85)",
         hunt: "rgba(176, 90, 70, 0.9)",
         chase: "rgba(184, 86, 72, 0.9)",
         flee: "rgba(186, 138, 72, 0.9)",
@@ -536,6 +577,8 @@ export class Renderer {
     const tileSize = CONFIG.baseTileSize * clamp(scale, 0.8, 1.2);
     const bounds = this.drawWorld(game, tileSize);
     this.drawStructuresBase(game, tileSize, bounds);
+    this.drawTrails(game, tileSize, bounds);
+    this.drawDens(game, tileSize, bounds);
     this.drawCreatures(game, tileSize, bounds);
     this.drawBuildPreview(game, tileSize, bounds);
     this.drawMoveTarget(game, tileSize, bounds);

@@ -5,6 +5,9 @@ export const CONFIG = {
   messageDuration: 1.6,
   messageMax: 3,
   baseTileSize: 32,
+  resourceRespawn: {
+    berrybush: { min: 70, max: 130 },
+  },
 };
 
 export const BUILDINGS = {
@@ -215,6 +218,8 @@ export const CREATURES = {
     fleeRange: 4.6,
     homeRange: 6,
     packRadius: 3.5,
+    trailSpacing: 0.55,
+    scentRange: 5.5,
     grazeGain: 12,
     berryGain: 34,
     drinkGain: 38,
@@ -253,6 +258,10 @@ export const CREATURES = {
     waterSearchRange: 8,
     homeRange: 7,
     packRadius: 4.6,
+    denType: "wolf_den",
+    denSearchRange: 10,
+    scentRange: 7.5,
+    trailSpacing: 0.6,
     meatGain: 40,
     needs: {
       maxHunger: 110,

@@ -1,4 +1,4 @@
-import { CREATURES } from "../config.js";
+import { CONFIG, CREATURES } from "../config.js";
 import { clamp } from "../utils/math.js";
 import { Random } from "../core/Random.js";
 import { AnimalNeeds } from "./AnimalNeeds.js";
@@ -51,7 +51,7 @@ export class Creature {
     }
   }
 
-  update(dt, player, world, weatherType, isNight, creatures, onAttack) {
+  update(dt, player, world, weatherType, isNight, creatures, trails, onAttack) {
     const result = { attackedPlayer: false, attackedPrey: false };
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
@@ -61,7 +61,7 @@ export class Creature {
     const nightSpeed = isNight ? this.def?.nightSpeedMultiplier ?? 1.2 : 1;
     const speedMod = (weatherType === "storm" ? 0.85 : weatherType === "fog" ? 0.92 : 1) * nightSpeed;
 
-    let intent = this.mind.update(dt, { player, world, creatures, isNight });
+    let intent = this.mind.update(dt, { player, world, creatures, trails, isNight });
     const hungerRatio = this.needs.ratioHunger();
     if (this.def?.diet === "carnivore") {
       const dx = player.x - this.x;
@@ -114,13 +114,27 @@ export class Creature {
       const dist = Math.hypot(intent.target.x - this.x, intent.target.y - this.y);
       if (dist < 0.6 && this.actionTimer <= 0) {
         if (intent.target.chunk && !intent.target.chunk.removed.has(intent.target.id)) {
-          intent.target.chunk.removed.add(intent.target.id);
+          const respawnConfig = CONFIG.resourceRespawn?.[intent.target.type];
+          if (respawnConfig) {
+            const respawnSeconds =
+              respawnConfig.min +
+              this.rng() * Math.max(0, respawnConfig.max - respawnConfig.min);
+            world.removeResource(intent.target, intent.target.chunk, respawnSeconds);
+          } else {
+            world.removeResource(intent.target, intent.target.chunk);
+          }
         }
         this.needs.feed(this.def?.berryGain ?? 32);
         this.actionTimer = 1 + this.rng() * 0.6;
         return result;
       }
       this.moveToward(intent.target.x, intent.target.y, this.speed * speedMod * (intent.speed ?? 1), dt, world);
+      return result;
+    }
+
+    if (intent.state === "track" && intent.target) {
+      this.state = intent.state;
+      this.moveToward(intent.target.x, intent.target.y, this.speed * speedMod * 0.85, dt, world);
       return result;
     }
 

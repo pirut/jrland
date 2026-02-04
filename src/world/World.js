@@ -64,10 +64,31 @@ export class World {
       cy,
       entities: [],
       removed: new Set(),
+      respawn: new Map(),
       creatures: [],
       removedCreatures: new Set(),
+      dens: [],
     };
     const rng = Random.mulberry32(Random.hash2(cx, cy, this.seed));
+    const centerX = cx * this.chunkSize + this.chunkSize / 2;
+    const centerY = cy * this.chunkSize + this.chunkSize / 2;
+    const band = this.biomeBand(centerX, centerY);
+    const denChance = band === "highland" ? 0.018 : band === "woodland" ? 0.012 : 0.008;
+    if (rng() < denChance) {
+      const dx = Math.floor(rng() * this.chunkSize);
+      const dy = Math.floor(rng() * this.chunkSize);
+      const tx = cx * this.chunkSize + dx;
+      const ty = cy * this.chunkSize + dy;
+      const type = this.tileType(tx, ty);
+      if (type === "grass" || type === "dirt") {
+        chunk.dens.push({
+          id: `den:${tx},${ty}`,
+          type: "wolf_den",
+          x: tx + 0.5,
+          y: ty + 0.5,
+        });
+      }
+    }
     for (let y = 0; y < this.chunkSize; y += 1) {
       for (let x = 0; x < this.chunkSize; x += 1) {
         const tx = cx * this.chunkSize + x;
@@ -160,6 +181,35 @@ export class World {
       });
     });
     return spawns;
+  }
+
+  getDensInView(minX, minY, maxX, maxY) {
+    const chunks = this.getChunksInView(minX, minY, maxX, maxY);
+    const dens = [];
+    chunks.forEach((chunk) => {
+      if (!chunk.dens?.length) return;
+      chunk.dens.forEach((den) => dens.push(den));
+    });
+    return dens;
+  }
+
+  findNearestDen(x, y, range, type = null) {
+    const minX = x - range;
+    const maxX = x + range;
+    const minY = y - range;
+    const maxY = y + range;
+    const dens = this.getDensInView(minX, minY, maxX, maxY);
+    let closest = null;
+    let closestDist = Infinity;
+    dens.forEach((den) => {
+      if (type && den.type !== type) return;
+      const dist = Math.hypot(den.x - x, den.y - y);
+      if (dist <= range && dist < closestDist) {
+        closest = den;
+        closestDist = dist;
+      }
+    });
+    return closest;
   }
 
   getStructureChunk(cx, cy) {
@@ -269,6 +319,29 @@ export class World {
       }
     }
     return closest;
+  }
+
+  removeResource(entity, chunk, respawnSeconds = null) {
+    if (!entity || !chunk) return;
+    chunk.removed.add(entity.id);
+    if (respawnSeconds && respawnSeconds > 0) {
+      chunk.respawn.set(entity.id, respawnSeconds);
+    }
+  }
+
+  update(dt) {
+    this.chunks.forEach((chunk) => {
+      if (!chunk.respawn || chunk.respawn.size === 0) return;
+      chunk.respawn.forEach((timer, id) => {
+        const next = timer - dt;
+        if (next <= 0) {
+          chunk.respawn.delete(id);
+          chunk.removed.delete(id);
+        } else {
+          chunk.respawn.set(id, next);
+        }
+      });
+    });
   }
 
   isStructureNear(x, y, radius) {

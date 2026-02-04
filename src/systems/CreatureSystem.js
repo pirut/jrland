@@ -1,19 +1,26 @@
 import { CREATURES, ITEMS, PROGRESSION } from "../config.js";
 import { Creature } from "../entities/Creature.js";
+import { TrailSystem } from "./TrailSystem.js";
 import { Random } from "../core/Random.js";
 
 export class CreatureSystem {
   constructor(world) {
     this.world = world;
     this.creatures = new Map();
+    this.trails = new TrailSystem();
   }
 
   reset() {
     this.creatures.clear();
+    this.trails.reset();
   }
 
   getActiveCreatures() {
     return Array.from(this.creatures.values());
+  }
+
+  getTrailsInView(bounds) {
+    return this.trails.getTrailsInView(bounds);
   }
 
   ensureCreaturesInView(game, bounds) {
@@ -28,6 +35,14 @@ export class CreatureSystem {
         y: spawn.y,
         seed,
       });
+      const den = creature.def?.denType
+        ? this.world.findNearestDen(creature.x, creature.y, creature.def.denSearchRange ?? 8, creature.def.denType)
+        : null;
+      if (den) {
+        creature.homeX = den.x;
+        creature.homeY = den.y;
+        creature.den = den;
+      }
       creature.spawnChunk = spawn.chunk;
       this.creatures.set(spawn.id, creature);
     });
@@ -44,12 +59,15 @@ export class CreatureSystem {
         game.weather.type,
         game.isNightTime(),
         creatureList,
+        this.trails,
         (amount) => game.applyDamage(amount)
       );
       if (result.attackedPlayer) {
         game.notifications.push(`${creature.type} hit`);
       }
     });
+    this.trails.record(creatureList);
+    this.trails.update(dt);
     const toRemove = [];
     creatureList.forEach((creature) => {
       if (creature.health <= 0) {

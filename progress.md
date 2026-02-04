@@ -232,3 +232,16 @@ Test log:
 TODOs (next agent):
 - Add explicit animal resting spots (nests/den markers) for stronger territory behavior.
 - Consider resource regrowth so herbivores don't exhaust berries permanently.
+
+Updates (2026-02-04, animal ecology + trails):
+- Added TrailSystem for tracks/scent trails; predators can track prey scent.
+- Added den markers per chunk (wolf dens) and spawn alignment for carnivores.
+- Added berry bush respawn timers; world now updates regrowth over time.
+- Added render hooks for trails + dens and included dens in render_game_to_text.
+
+Test log:
+- Ran Playwright client after ecology changes (latest: shot-1-1770230153519.png, state-1-1770230153519.json).
+
+TODOs (next agent):
+- Add visible den ownership (pack IDs) and den defense behavior.
+- Tune trail visibility or gate behind debug toggle if it’s too noisy.

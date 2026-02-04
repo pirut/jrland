@@ -426,7 +426,15 @@ export class Game {
       this.notifications.push("Inventory full");
       return;
     }
-    found.chunk.removed.add(found.entity.id);
+    const respawnConfig = CONFIG.resourceRespawn?.[found.entity.type];
+    if (found.entity.type === "berrybush" && respawnConfig) {
+      const respawnSeconds =
+        respawnConfig.min +
+        Math.random() * Math.max(0, respawnConfig.max - respawnConfig.min);
+      this.world.removeResource(found.entity, found.chunk, respawnSeconds);
+    } else {
+      this.world.removeResource(found.entity, found.chunk);
+    }
     if (found.entity.type === "tree") {
       this.inventory.addItem("wood", yieldAmount, maxStack);
       this.notifications.push(`Gathered wood +${yieldAmount}`);
@@ -567,6 +575,7 @@ export class Game {
     this.build.updatePreview(this.player, this.world, blueprint, unlocked, requiredLevel, pointer);
     this.weather.update(dt);
     this.notifications.update(dt);
+    this.world.update(dt);
     const wasNight = this.isNight;
     this.timeOfDay = (this.timeOfDay + dt / 240) % 1;
     this.isNight = this.isNightTime();
@@ -633,6 +642,7 @@ export class Game {
     }
     const structures = this.world.getStructuresInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
     const creatures = this.creatures?.getActiveCreatures?.() ?? [];
+    const dens = this.world.getDensInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
     const biome = this.world.getBiome(Math.floor(this.player.x), Math.floor(this.player.y));
     const biomeBandName = this.world.biomeBand(Math.floor(this.player.x), Math.floor(this.player.y));
     const payload = {
@@ -720,6 +730,11 @@ export class Game {
         hunger: Number(creature.needs?.hunger?.toFixed?.(1) ?? 0),
         thirst: Number(creature.needs?.thirst?.toFixed?.(1) ?? 0),
         energy: Number(creature.needs?.energy?.toFixed?.(1) ?? 0),
+      })),
+      dens: dens.slice(0, 12).map((den) => ({
+        type: den.type,
+        x: Number(den.x.toFixed(2)),
+        y: Number(den.y.toFixed(2)),
       })),
       structures: structures.slice(0, 40).map((structure) => ({
         type: structure.type,

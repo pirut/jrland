@@ -36,7 +36,7 @@ export const BUILDINGS = {
     canopy: false,
   },
   hut: {
-    cost: { planks: 6, stone: 4 },
+    cost: { planks: 6, stone: 4, hide: 2 },
     footprint: { w: 3, h: 2 },
     baseSize: { w: 1.1, h: 0.65 },
     roof: { w: 1.6, h: 1.1, offsetY: -0.25 },
@@ -51,12 +51,15 @@ export const ITEMS = {
   stone: { name: "Stone", maxStack: 32 },
   berry: { name: "Berries", maxStack: 16, edible: { hunger: 18, stamina: 6 } },
   planks: { name: "Planks", maxStack: 32 },
+  meat: { name: "Meat", maxStack: 8, edible: { hunger: 28, stamina: 10, health: 4 } },
+  hide: { name: "Hide", maxStack: 12 },
   campfire: { name: "Campfire", maxStack: 16 },
   shelter: { name: "Shelter", maxStack: 8 },
   workbench: { name: "Workbench", maxStack: 8 },
   hut: { name: "Hut", maxStack: 4 },
   stone_axe: { name: "Stone Axe", maxStack: 1 },
   stone_pick: { name: "Stone Pick", maxStack: 1 },
+  stone_spear: { name: "Stone Spear", maxStack: 1 },
   backpack: { name: "Backpack", maxStack: 1 },
 };
 
@@ -70,6 +73,12 @@ export const CRAFTING_RECIPES = [
   {
     pattern: ["stone", "stone", "stone", "wood"],
     output: { id: "stone_pick", count: 1 },
+    unlockLevel: 3,
+    requiresStructure: "workbench",
+  },
+  {
+    pattern: ["wood", "stone", "wood", "stone"],
+    output: { id: "stone_spear", count: 1 },
     unlockLevel: 3,
     requiresStructure: "workbench",
   },
@@ -94,6 +103,22 @@ export const PROGRESSION = {
     build: 6,
     craft: 5,
     forage: 2,
+    combat: 6,
+  },
+};
+
+export const CREATURES = {
+  boar: {
+    maxHealth: 28,
+    speed: 1.6,
+    aggroRange: 3.4,
+    attackRange: 0.8,
+    damage: 8,
+    xp: 10,
+    drops: [
+      { id: "meat", min: 1, max: 2 },
+      { id: "hide", min: 0, max: 1 },
+    ],
   },
 };
 
@@ -145,6 +170,14 @@ export const QUESTS = [
     target: 1,
     label: "Build a shelter",
     rewardXp: 14,
+  },
+  {
+    id: "hunt-boar",
+    type: "gather",
+    item: "meat",
+    target: 2,
+    label: "Hunt boar (loot meat)",
+    rewardXp: 16,
   },
 ];
 

@@ -140,3 +140,13 @@ Updates (2026-02-03, progression quests + build UX):
 
 Test log:
 - Ran Playwright client after quests + build UX changes; screenshots/state captured in output/web-game (latest: shot-2-1770210783470.png, state-2-1770210783470.json).
+
+Updates (2026-02-03, combat + world events + build catalog polish):
+- Added hostile boar creatures with simple AI (wander/chase/attack), health bars, and loot drops (meat/hide) plus XP.
+- Added stone spear crafting and weapon slot; spacebar attacks.
+- Added fog and storm weather types with visual overlays and storm stamina/hunger drain.
+- Added build catalog HUD panel with costs/unlocks and rotation hints.
+- Added interaction prompts for enemies + structure use, and rotation to build preview with grid outlines.
+
+Test log:
+- Ran Playwright client after combat/world-event/build-catalog updates; screenshots/state captured in output/web-game (latest: shot-2-1770213914204.png, state-2-1770213914204.json).

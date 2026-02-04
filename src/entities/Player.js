@@ -25,6 +25,7 @@ export class Player {
     this.health = this.maxHealth;
     this.stamina = this.maxStamina;
     this.gatherCooldown = 0;
+    this.attackCooldown = 0;
   }
 
   applyProgression(level) {
@@ -48,9 +49,10 @@ export class Player {
 
   updateCooldown(dt) {
     this.gatherCooldown = Math.max(0, this.gatherCooldown - dt);
+    this.attackCooldown = Math.max(0, this.attackCooldown - dt);
   }
 
-  updateMovement(dt, input, world, structureContext) {
+  updateMovement(dt, input, world, structureContext, weatherType) {
     let moveX = 0;
     let moveY = 0;
     if (input.isDown("w")) moveY -= 1;
@@ -66,7 +68,8 @@ export class Player {
     }
 
     const wantsSprint = input.isDown("shift") && this.stamina > 5;
-    const speed = wantsSprint ? this.sprintSpeed : this.moveSpeed;
+    const weatherMod = weatherType === "storm" ? 0.88 : weatherType === "fog" ? 0.94 : 1;
+    const speed = (wantsSprint ? this.sprintSpeed : this.moveSpeed) * weatherMod;
     const shelterBoost = structureContext.nearShelter ? 1.4 : 1;
     if (wantsSprint && length > 0) {
       this.stamina = clamp(this.stamina - dt * 30, 0, this.maxStamina);
@@ -92,7 +95,12 @@ export class Player {
     const warmth = structureContext.nearCampfire ? 0.45 : 1;
     const canopyShade = structureContext.underCanopy ? 0.75 : 1;
     const healBoost = structureContext.nearCampfire ? 1.4 : 1;
-    this.hunger = clamp(this.hunger - dt * 0.6 * warmth * canopyShade, 0, this.maxHunger);
+    const stormDrain = structureContext.stormDrain ?? 1;
+    this.hunger = clamp(
+      this.hunger - dt * 0.6 * warmth * canopyShade * stormDrain,
+      0,
+      this.maxHunger
+    );
     if (this.hunger <= 0) {
       this.health = clamp(this.health - dt * 0.9, 0, this.maxHealth);
     } else if (this.hunger > 0.8 * this.maxHunger) {

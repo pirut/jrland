@@ -8,6 +8,7 @@ import { NotificationCenter } from "../systems/NotificationCenter.js";
 import { ChatSystem } from "../systems/ChatSystem.js";
 import { Progression } from "../systems/Progression.js";
 import { QuestSystem } from "../systems/QuestSystem.js";
+import { CreatureSystem } from "../systems/CreatureSystem.js";
 import { Renderer } from "../render/Renderer.js";
 import { HudRenderer } from "../render/HudRenderer.js";
 import { InputController } from "../core/InputController.js";
@@ -36,18 +37,20 @@ export class Game {
     this.chat = new ChatSystem();
     this.progression = new Progression();
     this.quests = new QuestSystem();
+    this.creatures = new CreatureSystem(this.world);
     this.input = new InputController();
     this.renderer = new Renderer(ctx);
     this.hudRenderer = new HudRenderer(ctx);
     this.seedControls = seedControls;
     this.ui = new UIState();
     this.inventoryUI = new InventoryUI();
-    this.gear = { tool: "none", backpack: false };
+    this.gear = { tool: "none", weapon: "none", backpack: false };
     this.structureContext = {
       nearCampfire: false,
       nearShelter: false,
       nearWorkbench: false,
       underCanopy: false,
+      stormDrain: 1,
     };
     this.interaction = { target: null, inRange: false, dist: null };
     this.timeOfDay = 0.25;
@@ -74,8 +77,9 @@ export class Game {
     this.inventory.reset();
     this.progression.reset();
     this.quests.reset();
-    this.gear = { tool: "none", backpack: false };
+    this.gear = { tool: "none", weapon: "none", backpack: false };
     this.build.reset();
+    this.creatures.reset();
     this.notifications.items = [];
     this.chat.messages = [];
     this.chat.input = "";
@@ -92,6 +96,7 @@ export class Game {
       nearShelter: false,
       nearWorkbench: false,
       underCanopy: false,
+      stormDrain: 1,
     };
     const spawn = this.world.findSpawn();
     this.player.reset(spawn);
@@ -190,10 +195,20 @@ export class Game {
   refreshEquipmentFromInventory() {
     const hasAxe = this.inventory.slots.some((slot) => slot.id === "stone_axe");
     const hasPick = this.inventory.slots.some((slot) => slot.id === "stone_pick");
+    const hasSpear = this.inventory.slots.some((slot) => slot.id === "stone_spear");
     const hasBackpack = this.inventory.slots.some((slot) => slot.id === "backpack");
     this.gear.tool = hasPick ? "stone_pick" : hasAxe ? "stone_axe" : "none";
+    this.gear.weapon = hasSpear ? "stone_spear" : "none";
     this.gear.backpack = hasBackpack;
     this.inventory.capacityBonus = hasBackpack ? 10 : 0;
+  }
+
+  attemptAttack() {
+    if (this.player.attackCooldown > 0) return;
+    const hit = this.creatures.attack(this, this.gear.weapon);
+    if (hit) {
+      this.player.attackCooldown = 0.45;
+    }
   }
 
   syncBuildSelection() {
@@ -236,6 +251,14 @@ export class Game {
   }
 
   updateInteraction() {
+    const enemy = this.creatures.findNearestInRange(this.player, 1.2);
+    if (enemy) {
+      this.interaction.target = enemy;
+      this.interaction.inRange = true;
+      this.interaction.dist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
+      this.interaction.kind = "enemy";
+      return;
+    }
     const found = this.world.findNearestResource(this.player.x, this.player.y, CONFIG.gatherRange);
     if (found) {
       this.interaction.target = found.entity;
@@ -295,6 +318,7 @@ export class Game {
     this.structureContext.nearShelter = nearShelter;
     this.structureContext.nearWorkbench = nearWorkbench;
     this.structureContext.underCanopy = underCanopy;
+    this.structureContext.stormDrain = this.weather.type === "storm" ? 1.35 : 1;
   }
 
   attemptGather() {
@@ -398,7 +422,14 @@ export class Game {
       return;
     }
     this.inventory.spend(blueprint.cost);
-    this.world.addStructure(this.build.selected, preview.originX, preview.originY, preview.w, preview.h);
+    this.world.addStructure(
+      this.build.selected,
+      preview.originX,
+      preview.originY,
+      preview.w,
+      preview.h,
+      preview.rotation ?? 0
+    );
     this.notifications.push(`Built ${this.build.selected}`);
     this.awardXp(PROGRESSION.xp.build);
     this.quests.onBuild(this.build.selected);
@@ -411,7 +442,7 @@ export class Game {
     this.refreshEquipmentFromInventory();
     this.syncBuildSelection();
     this.updateStructureContext();
-    this.player.updateMovement(dt, this.input, this.world, this.structureContext);
+    this.player.updateMovement(dt, this.input, this.world, this.structureContext, this.weather.type);
     this.updateStructureContext();
     this.player.updateNeeds(dt, this.structureContext);
     this.updateInteraction();
@@ -423,11 +454,16 @@ export class Game {
     this.notifications.update(dt);
     this.timeOfDay = (this.timeOfDay + dt / 240) % 1;
     if (this.input.wasPressed("e")) this.attemptBuild();
+    if (this.input.wasPressed(" ") || this.input.wasPressed("space")) this.attemptAttack();
     if (this.input.wasPressed("r")) this.useActiveItem();
     this.input.clearPressed();
     const smooth = 1 - Math.pow(0.001, dt * 4.5);
     this.camera.x = lerp(this.camera.x, this.player.x, smooth);
     this.camera.y = lerp(this.camera.y, this.player.y, smooth);
+    const scale = Math.min(this.view.width / 960, this.view.height / 540);
+    const tileSize = CONFIG.baseTileSize * clamp(scale, 0.8, 1.2);
+    const bounds = this.renderer.getViewBounds(this, tileSize);
+    this.creatures.update(this, dt, bounds);
   }
 
   render() {
@@ -475,6 +511,7 @@ export class Game {
       }
     }
     const structures = this.world.getStructuresInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
+    const creatures = this.creatures?.getActiveCreatures?.() ?? [];
     const biome = this.world.getBiome(Math.floor(this.player.x), Math.floor(this.player.y));
     const biomeBandName = this.world.biomeBand(Math.floor(this.player.x), Math.floor(this.player.y));
     const payload = {
@@ -506,6 +543,8 @@ export class Game {
         stone: this.inventory.getCount("stone"),
         berries: this.inventory.getCount("berry"),
         planks: this.inventory.getCount("planks"),
+        meat: this.inventory.getCount("meat"),
+        hide: this.inventory.getCount("hide"),
         capacity: this.inventory.capacity(),
         used: this.inventory.count(),
       },
@@ -529,6 +568,12 @@ export class Game {
         },
       },
       resources: resources.slice(0, 60),
+      creatures: creatures.slice(0, 20).map((creature) => ({
+        type: creature.type,
+        x: Number(creature.x.toFixed(2)),
+        y: Number(creature.y.toFixed(2)),
+        health: Number(creature.health.toFixed(1)),
+      })),
       structures: structures.slice(0, 40).map((structure) => ({
         type: structure.type,
         x: Number(structure.x.toFixed(2)),
@@ -537,6 +582,7 @@ export class Game {
         originY: Number((structure.originY ?? structure.y - 0.5).toFixed(2)),
         w: structure.w ?? 1,
         h: structure.h ?? 1,
+        rotation: structure.rotation ?? 0,
       })),
       interaction: this.interaction.target
         ? {
@@ -559,6 +605,7 @@ export class Game {
               originY: Number(this.build.preview.originY.toFixed(2)),
               w: this.build.preview.w,
               h: this.build.preview.h,
+              rotation: this.build.preview.rotation ?? 0,
               valid: this.build.preview.valid,
               reason: this.build.preview.reason,
             }

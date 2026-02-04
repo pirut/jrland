@@ -260,6 +260,47 @@ export class Renderer {
     });
   }
 
+  drawCreatures(game, tileSize, bounds) {
+    const creatures = game.creatures?.getActiveCreatures?.() ?? [];
+    creatures.forEach((creature) => {
+      if (
+        creature.x < bounds.minX ||
+        creature.x > bounds.maxX ||
+        creature.y < bounds.minY ||
+        creature.y > bounds.maxY
+      ) {
+        return;
+      }
+      const px = (creature.x - bounds.minX) * tileSize;
+      const py = (creature.y - bounds.minY) * tileSize;
+      const bodyColor = creature.hitFlash > 0 ? "rgba(195, 94, 94, 0.9)" : "rgba(48, 54, 52, 0.9)";
+      this.ctx.save();
+      this.ctx.fillStyle = "rgba(0,0,0,0.2)";
+      this.ctx.beginPath();
+      this.ctx.ellipse(px, py + tileSize * 0.18, tileSize * 0.35, tileSize * 0.2, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.fillStyle = bodyColor;
+      this.ctx.beginPath();
+      this.ctx.ellipse(px, py, tileSize * 0.28, tileSize * 0.2, 0.2, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.fillStyle = "rgba(85, 90, 88, 0.9)";
+      this.ctx.beginPath();
+      this.ctx.arc(px - tileSize * 0.18, py - tileSize * 0.02, tileSize * 0.08, 0, Math.PI * 2);
+      this.ctx.arc(px + tileSize * 0.18, py - tileSize * 0.02, tileSize * 0.08, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      if (creature.health < creature.maxHealth) {
+        const ratio = creature.health / creature.maxHealth;
+        const barWidth = tileSize * 0.6;
+        this.ctx.fillStyle = "rgba(255,255,255,0.6)";
+        this.ctx.fillRect(px - barWidth / 2, py - tileSize * 0.45, barWidth, 4);
+        this.ctx.fillStyle = "rgba(185, 72, 60, 0.8)";
+        this.ctx.fillRect(px - barWidth / 2, py - tileSize * 0.45, barWidth * ratio, 4);
+      }
+      this.ctx.restore();
+    });
+  }
+
   drawBuildPreview(game, tileSize, bounds) {
     if (!game.build.active || !game.build.preview) return;
     const preview = game.build.preview;
@@ -308,7 +349,8 @@ export class Renderer {
     this.ctx.stroke();
     this.ctx.fillStyle = `rgba(15, 20, 23, ${0.6 + pulse * 0.3})`;
     this.ctx.font = "12px 'Manrope', sans-serif";
-    this.ctx.fillText("E", px - 3, py - tileSize * 0.55);
+    const keyLabel = game.interaction.kind === "enemy" ? "Space" : "E";
+    this.ctx.fillText(keyLabel, px - (game.interaction.kind === "enemy" ? 16 : 3), py - tileSize * 0.55);
     if (game.interaction.kind === "structure") {
       const label =
         target.type === "campfire"
@@ -321,6 +363,9 @@ export class Renderer {
                 ? "Sleep"
                 : "Use";
       this.ctx.fillText(label, px - 14, py + tileSize * 0.65);
+    }
+    if (game.interaction.kind === "enemy") {
+      this.ctx.fillText("Attack", px - 16, py + tileSize * 0.65);
     }
     this.ctx.restore();
   }
@@ -349,7 +394,23 @@ export class Renderer {
       this.ctx.fillRect(0, 0, game.view.width, game.view.height);
       return;
     }
-    if (game.weather.type !== "rain") return;
+    if (game.weather.type === "fog") {
+      this.ctx.fillStyle = "rgba(210, 214, 210, 0.18)";
+      this.ctx.fillRect(0, 0, game.view.width, game.view.height);
+      this.ctx.fillStyle = "rgba(180, 190, 190, 0.12)";
+      this.ctx.fillRect(0, 0, game.view.width, game.view.height * 0.6);
+      return;
+    }
+    if (game.weather.type === "storm") {
+      this.ctx.fillStyle = "rgba(60, 70, 74, 0.28)";
+      this.ctx.fillRect(0, 0, game.view.width, game.view.height);
+      const flash = 0.5 + 0.5 * Math.sin(game.weather.fxTime * 5);
+      if (flash > 0.92) {
+        this.ctx.fillStyle = "rgba(240, 240, 255, 0.35)";
+        this.ctx.fillRect(0, 0, game.view.width, game.view.height);
+      }
+    }
+    if (game.weather.type !== "rain" && game.weather.type !== "storm") return;
     this.ctx.fillStyle = "rgba(70, 82, 86, 0.22)";
     this.ctx.fillRect(0, 0, game.view.width, game.view.height);
     this.ctx.strokeStyle = "rgba(190, 210, 220, 0.4)";
@@ -387,6 +448,7 @@ export class Renderer {
     const tileSize = CONFIG.baseTileSize * clamp(scale, 0.8, 1.2);
     const bounds = this.drawWorld(game, tileSize);
     this.drawStructuresBase(game, tileSize, bounds);
+    this.drawCreatures(game, tileSize, bounds);
     this.drawBuildPreview(game, tileSize, bounds);
     this.drawInteractionHighlight(game, tileSize, bounds);
     this.drawPlayer(game, tileSize, bounds);

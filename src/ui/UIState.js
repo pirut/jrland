@@ -5,6 +5,7 @@ export class UIState {
     this.showHotbar = true;
     this.showInventoryReadout = true;
     this.showBuildBanner = true;
+    this.showBuildCatalog = true;
     this.showChat = true;
     this.showDebug = true;
     this.showProgress = true;

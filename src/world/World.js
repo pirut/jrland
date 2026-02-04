@@ -63,6 +63,8 @@ export class World {
       cy,
       entities: [],
       removed: new Set(),
+      creatures: [],
+      removedCreatures: new Set(),
     };
     const rng = Random.mulberry32(Random.hash2(cx, cy, this.seed));
     for (let y = 0; y < this.chunkSize; y += 1) {
@@ -72,6 +74,7 @@ export class World {
         const type = this.tileType(tx, ty);
         const biome = this.getBiome(tx, ty, type);
         const roll = rng();
+        const creatureRoll = rng();
         if (type === "grass" || type === "dirt") {
           let treeChance = 0.05;
           if (biome === "prairie") treeChance = 0.03;
@@ -90,6 +93,15 @@ export class World {
             chunk.entities.push({
               id: `${tx},${ty}`,
               type: "berrybush",
+              x: tx + 0.5,
+              y: ty + 0.5,
+            });
+          }
+          const creatureChance = biome === "woodland" ? 0.02 : 0.012;
+          if (creatureRoll < creatureChance) {
+            chunk.creatures.push({
+              id: `creature:${tx},${ty}`,
+              type: "boar",
               x: tx + 0.5,
               y: ty + 0.5,
             });
@@ -127,6 +139,18 @@ export class World {
     return chunks;
   }
 
+  getCreatureSpawnsInView(minX, minY, maxX, maxY) {
+    const chunks = this.getChunksInView(minX, minY, maxX, maxY);
+    const spawns = [];
+    chunks.forEach((chunk) => {
+      chunk.creatures.forEach((spawn) => {
+        if (chunk.removedCreatures.has(spawn.id)) return;
+        spawns.push({ ...spawn, chunk });
+      });
+    });
+    return spawns;
+  }
+
   getStructureChunk(cx, cy) {
     const key = this.chunkKey(cx, cy);
     if (!this.structures.has(key)) {
@@ -135,7 +159,7 @@ export class World {
     return this.structures.get(key);
   }
 
-  addStructure(type, originX, originY, w = 1, h = 1) {
+  addStructure(type, originX, originY, w = 1, h = 1, rotation = 0) {
     const size = this.chunkSize;
     const cx = Math.floor(originX / size);
     const cy = Math.floor(originY / size);
@@ -151,6 +175,7 @@ export class World {
       originY,
       w,
       h,
+      rotation,
     });
   }
 
@@ -207,6 +232,14 @@ export class World {
   isStructureNear(x, y, radius) {
     const structures = this.getStructuresInView(x - radius, y - radius, x + radius, y + radius);
     return structures.some((structure) => Math.hypot(structure.x - x, structure.y - y) < radius);
+  }
+
+  isStructureNearRadius(x, y, radius) {
+    const structures = this.getStructuresInView(x - radius, y - radius, x + radius, y + radius);
+    return structures.some((structure) => {
+      const size = Math.max(structure.w ?? 1, structure.h ?? 1) * 0.5;
+      return Math.hypot(structure.x - x, structure.y - y) < radius + size;
+    });
   }
 
   hasStructureOverlap(originX, originY, w, h) {

@@ -153,7 +153,9 @@ export class BuildBanner {
       .join(" · ");
     const preview = game.build.preview;
     const reason = preview && !preview.valid && preview.reason ? ` — ${preview.reason}` : "";
-    const text = `Build: ${game.build.selected} (${costText})${reason}`;
+    const sizeText = blueprint.footprint ? `${blueprint.footprint.w}x${blueprint.footprint.h}` : "1x1";
+    const rotationText = game.build.rotation ? ` rot ${game.build.rotation * 90}°` : "";
+    const text = `Build: ${game.build.selected} ${sizeText}${rotationText} (${costText})${reason}`;
     this.ctx.save();
     this.ctx.font = "12px 'Manrope', sans-serif";
     const width = this.ctx.measureText(text).width + 20;
@@ -163,6 +165,60 @@ export class BuildBanner {
     this.ctx.fillRect(x, y - 14, width, 20);
     this.ctx.fillStyle = "rgba(15,20,23,0.8)";
     this.ctx.fillText(text, x + 10, y);
+    this.ctx.restore();
+  }
+}
+
+export class BuildCatalog {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+
+  draw(game) {
+    if (!game.ui.showBuildCatalog) return;
+    if (!game.build.active) return;
+    const entries = Object.entries(BUILDINGS);
+    const padding = 10;
+    const lineHeight = 14;
+    const x = game.view.width - 210;
+    const y = game.view.height - 220;
+    this.ctx.save();
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    const lines = entries.map(([id, def], idx) => {
+      const level = def.unlockLevel ?? 1;
+      const locked = game.progression.level < level;
+      const cost = Object.entries(def.cost)
+        .map(([key, value]) => `${key} ${value}`)
+        .join(" ");
+      return {
+        id,
+        text: `${idx + 1}. ${id} (${cost})${locked ? ` L${level}` : ""}`,
+        locked,
+        selected: game.build.selected === id,
+      };
+    });
+    const header = "Build Catalog (Q rotate)";
+    const width =
+      Math.max(
+        this.ctx.measureText(header).width,
+        ...lines.map((line) => this.ctx.measureText(line.text).width)
+      ) + padding * 2;
+    const height = (lines.length + 1) * lineHeight + padding * 2;
+    this.ctx.fillStyle = "rgba(255,255,255,0.7)";
+    this.ctx.fillRect(x, y, width, height);
+    this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    this.ctx.strokeRect(x, y, width, height);
+    this.ctx.fillStyle = "rgba(15,20,23,0.75)";
+    this.ctx.fillText(header, x + padding, y + padding);
+    lines.forEach((line, index) => {
+      const lineY = y + padding + (index + 1) * lineHeight;
+      if (line.selected) {
+        this.ctx.fillStyle = "rgba(47,111,79,0.2)";
+        this.ctx.fillRect(x + 4, lineY - 10, width - 8, lineHeight);
+      }
+      this.ctx.fillStyle = line.locked ? "rgba(15,20,23,0.35)" : "rgba(15,20,23,0.8)";
+      this.ctx.fillText(line.text, x + padding, lineY);
+    });
     this.ctx.restore();
   }
 }
@@ -181,7 +237,8 @@ export class InventoryReadout {
         : game.gear.tool === "stone_pick"
           ? "Pick"
           : "None";
-    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Carry ${capacity}  |  Tool ${tool}`;
+    const weapon = game.gear.weapon === "stone_spear" ? "Spear" : "None";
+    const text = `Wood ${game.inventory.getCount("wood")}  |  Stone ${game.inventory.getCount("stone")}  |  Planks ${game.inventory.getCount("planks")}  |  Berries ${game.inventory.getCount("berry")}  |  Meat ${game.inventory.getCount("meat")}  |  Hide ${game.inventory.getCount("hide")}  |  Carry ${capacity}  |  Tool ${tool}  |  Weapon ${weapon}`;
     this.ctx.save();
     this.ctx.font = "12px 'Manrope', sans-serif";
     const width = this.ctx.measureText(text).width + 16;
@@ -339,19 +396,24 @@ export class InventoryOverlay {
     this.ctx.font = "12px 'Manrope', sans-serif";
     this.ctx.fillStyle = "rgba(15,20,23,0.7)";
     const statsX = x + 16;
-    const statsY = y + panelHeight - 52;
-    const statsLine2Y = y + panelHeight - 34;
+    const statsY = y + panelHeight - 62;
+    const statsLine2Y = y + panelHeight - 44;
+    const statsLine3Y = y + panelHeight - 26;
     this.ctx.fillText(`Wood: ${game.inventory.getCount("wood")}`, statsX, statsY);
     this.ctx.fillText(`Stone: ${game.inventory.getCount("stone")}`, statsX + 120, statsY);
     this.ctx.fillText(`Berries: ${game.inventory.getCount("berry")}`, statsX + 240, statsY);
     this.ctx.fillText(`Planks: ${game.inventory.getCount("planks")}`, statsX + 360, statsY);
+    this.ctx.fillText(`Meat: ${game.inventory.getCount("meat")}`, statsX, statsLine2Y);
+    this.ctx.fillText(`Hide: ${game.inventory.getCount("hide")}`, statsX + 120, statsLine2Y);
     const toolLabel =
       game.gear.tool === "stone_axe"
         ? "Stone Axe"
         : game.gear.tool === "stone_pick"
           ? "Stone Pick"
           : "None";
-    this.ctx.fillText(`Tool: ${toolLabel}`, statsX, statsLine2Y);
+    const weaponLabel = game.gear.weapon === "stone_spear" ? "Stone Spear" : "None";
+    this.ctx.fillText(`Tool: ${toolLabel}`, statsX, statsLine3Y);
+    this.ctx.fillText(`Weapon: ${weaponLabel}`, statsX + 180, statsLine3Y);
 
     if (game.ui.cursorItem) {
       drawItemIcon(this.ctx, game.ui.cursorItem.id, game.ui.mouseX - 8, game.ui.mouseY - 8, 2);

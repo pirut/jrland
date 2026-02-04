@@ -302,7 +302,7 @@ canvas.addEventListener("mousedown", (event) => {
   game.ui.mouseWorldY = world.y;
 
   if (game.ui.inventoryOpen) {
-    game.inventoryUI.handleClick(game, x, y, event.button);
+    game.inventoryUI.handleClick(game, x, y, event.button, { shiftKey: event.shiftKey });
     return;
   }
 
@@ -329,8 +329,11 @@ canvas.addEventListener("mousedown", (event) => {
   }
 
   if (event.button === 2) {
-    if (game.interaction.kind === "enemy") {
-      game.attemptAttack();
+    const target = game.creatures.findNearestAt(world.x, world.y, 0.9);
+    if (target) {
+      game.attemptAttackAt(target.x, target.y);
+    } else if (game.interaction.kind === "enemy") {
+      game.attemptAttackAt(world.x, world.y);
     } else if (!game.attemptInteract()) {
       game.attemptGather();
     }

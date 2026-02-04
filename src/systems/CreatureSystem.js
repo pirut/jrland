@@ -77,16 +77,29 @@ export class CreatureSystem {
     return closest;
   }
 
-  attack(game, weapon) {
-    const target = this.findNearestInRange(game.player, 1.1);
-    if (!target) return false;
-    const dx = target.x - game.player.x;
-    const dy = target.y - game.player.y;
+  findNearestAt(x, y, range = 0.8) {
+    let closest = null;
+    let closestDist = Infinity;
+    this.creatures.forEach((creature) => {
+      const dist = Math.hypot(creature.x - x, creature.y - y);
+      if (dist <= range && dist < closestDist) {
+        closest = creature;
+        closestDist = dist;
+      }
+    });
+    return closest;
+  }
+
+  attack(game, weapon, target = null) {
+    const chosen = target ?? this.findNearestInRange(game.player, 1.1);
+    if (!chosen) return false;
+    const dx = chosen.x - game.player.x;
+    const dy = chosen.y - game.player.y;
     const dist = Math.hypot(dx, dy) || 1;
     const dot = (dx / dist) * (game.player.facingX || 0) + (dy / dist) * (game.player.facingY || 1);
     if (dot < -0.15) return false;
     const damage = weapon === "reinforced_spear" ? 20 : weapon === "stone_spear" ? 14 : 8;
-    target.takeDamage(damage);
+    chosen.takeDamage(damage);
     game.notifications.push("Hit!");
     return true;
   }

@@ -263,6 +263,22 @@ export class Game {
     }
   }
 
+  attemptAttackAt(worldX, worldY) {
+    if (this.player.attackCooldown > 0) return;
+    const dx = worldX - this.player.x;
+    const dy = worldY - this.player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0.05) {
+      this.player.facingX = dx / dist;
+      this.player.facingY = dy / dist;
+    }
+    const target = this.creatures.findNearestAt(worldX, worldY, 0.8);
+    const hit = this.creatures.attack(this, this.gear.weapon, target);
+    if (hit) {
+      this.player.attackCooldown = 0.45;
+    }
+  }
+
   syncBuildSelection() {
     const slot = this.inventory.slots[this.ui.activeHotbarIndex];
     if (slot && BUILDINGS[slot.id] && this.isBuildUnlocked(slot.id)) {

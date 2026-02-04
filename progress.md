@@ -189,3 +189,12 @@ Updates (2026-02-04, UI + mouse support):
 Test log:
 - Ran Playwright client after mouse/UI updates; screenshots/state captured in output/web-game (latest: shot-2-1770218067667.png, state-2-1770218067667.json).
 - Ran Playwright client to capture inventory overlay layout (latest: shot-1-1770218282656.png, state-1-1770218282656.json).
+
+Updates (2026-02-04, inventory UX + build planner):
+- Added stack management: right-click split/merge, right-click place single, shift-click quick transfer between storage and inventory.
+- Added mouse-directed attack (right-click target) and attack-at helper for precise combat.
+- Added build planner panel with icon, cost, size, and quick hints.
+- Build catalog now shows icons per entry and wider line spacing.
+
+Test log:
+- Ran Playwright client after build planner updates (latest: shot-1-1770219218532.png, state-1-1770219218532.json).

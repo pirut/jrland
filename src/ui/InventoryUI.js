@@ -90,7 +90,7 @@ export class InventoryUI {
     });
   }
 
-  handleClick(game, x, y, button = 0) {
+  handleClick(game, x, y, button = 0, mods = {}) {
     const layout = this.getLayout(game);
     const inside =
       x >= layout.panel.x &&
@@ -109,26 +109,27 @@ export class InventoryUI {
       y <= layout.outputSlot.y + layout.outputSlot.h
     ) {
       if (output) {
-          if (result?.locked) {
-            if (result.structureLocked) {
-              game.notifications.push(`Requires ${result.requiresStructure}`);
-            } else {
-              game.notifications.push(`Requires level ${result.requiredLevel}`);
-            }
-            game.ui.cursorItem = this.cursor;
-            return;
+        if (result?.locked) {
+          if (result.structureLocked) {
+            game.notifications.push(`Requires ${result.requiresStructure}`);
+          } else {
+            game.notifications.push(`Requires level ${result.requiredLevel}`);
           }
-          const cursor = this.cursor;
-          const maxStack = ITEMS[output.id]?.maxStack ?? 1;
-          if (!cursor || cursor.id === output.id) {
-            const total = (cursor?.count ?? 0) + output.count;
-            if (total <= maxStack) {
-              this.cursor = { id: output.id, count: total };
-              this.consumeRecipe(game.craftingGrid);
-              game.onCraft?.(output);
-            }
+          game.ui.cursorItem = this.cursor;
+          return;
+        }
+        const cursor = this.cursor;
+        const maxStack = ITEMS[output.id]?.maxStack ?? 1;
+        if (!cursor || cursor.id === output.id) {
+          const craftCount = button === 2 ? 1 : output.count;
+          const total = (cursor?.count ?? 0) + craftCount;
+          if (total <= maxStack) {
+            this.cursor = { id: output.id, count: total };
+            this.consumeRecipe(game.craftingGrid);
+            game.onCraft?.({ ...output, count: craftCount });
           }
         }
+      }
       game.ui.cursorItem = this.cursor;
       return;
     }
@@ -137,7 +138,14 @@ export class InventoryUI {
       const rect = layout.slots[i];
       if (!rect) continue;
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-        this.cursor = this.handleSlotClick(game.inventory.slots[i], this.cursor);
+        if (mods.shiftKey && layout.hasStorage) {
+          const moved = this.quickTransfer(game.inventory.slots[i], game.storage.getActiveContainer()?.slots ?? []);
+          if (moved) {
+            game.ui.cursorItem = this.cursor;
+            return;
+          }
+        }
+        this.cursor = this.handleSlotClickAdvanced(game.inventory.slots[i], this.cursor, button);
         game.ui.cursorItem = this.cursor;
         return;
       }
@@ -147,7 +155,7 @@ export class InventoryUI {
       const rect = layout.craftSlots[i];
       if (!rect) continue;
       if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-        this.cursor = this.handleSlotClick(game.craftingGrid[i], this.cursor);
+        this.cursor = this.handleSlotClickAdvanced(game.craftingGrid[i], this.cursor, button);
         game.ui.cursorItem = this.cursor;
         return;
       }
@@ -160,7 +168,14 @@ export class InventoryUI {
           const rect = layout.storageSlots[i];
           if (!rect) continue;
           if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
-            this.cursor = this.handleSlotClick(storage.slots[i], this.cursor);
+            if (mods.shiftKey) {
+              const moved = this.quickTransfer(storage.slots[i], game.inventory.slots);
+              if (moved) {
+                game.ui.cursorItem = this.cursor;
+                return;
+              }
+            }
+            this.cursor = this.handleSlotClickAdvanced(storage.slots[i], this.cursor, button);
             game.ui.cursorItem = this.cursor;
             return;
           }
@@ -168,5 +183,80 @@ export class InventoryUI {
       }
     }
     game.ui.cursorItem = this.cursor;
+  }
+
+  handleSlotClickAdvanced(slot, cursor, button = 0) {
+    if (button === 2) {
+      if (!cursor && slot.id) {
+        return this.pickUpHalf(slot);
+      }
+      if (cursor) {
+        return this.placeSingle(cursor, slot);
+      }
+      return cursor;
+    }
+    return this.handleSlotClick(slot, cursor);
+  }
+
+  pickUpHalf(slot) {
+    if (!slot.id || slot.count <= 0) return null;
+    const take = Math.ceil(slot.count / 2);
+    slot.count -= take;
+    if (slot.count <= 0) {
+      const picked = { id: slot.id, count: take };
+      slot.id = null;
+      slot.count = 0;
+      return picked;
+    }
+    return { id: slot.id, count: take };
+  }
+
+  placeSingle(cursor, slot) {
+    if (!cursor) return null;
+    if (!slot.id) {
+      slot.id = cursor.id;
+      slot.count = 1;
+      const remaining = cursor.count - 1;
+      return remaining > 0 ? { id: cursor.id, count: remaining } : null;
+    }
+    if (slot.id !== cursor.id) return cursor;
+    const maxStack = ITEMS[cursor.id]?.maxStack ?? 1;
+    if (slot.count >= maxStack) return cursor;
+    slot.count += 1;
+    const remaining = cursor.count - 1;
+    return remaining > 0 ? { id: cursor.id, count: remaining } : null;
+  }
+
+  quickTransfer(sourceSlot, destSlots) {
+    if (!sourceSlot.id || sourceSlot.count <= 0) return false;
+    let remaining = sourceSlot.count;
+    const maxStack = ITEMS[sourceSlot.id]?.maxStack ?? 1;
+    destSlots.forEach((slot) => {
+      if (remaining <= 0) return;
+      if (slot.id === sourceSlot.id && slot.count < maxStack) {
+        const space = maxStack - slot.count;
+        const transfer = Math.min(space, remaining);
+        slot.count += transfer;
+        remaining -= transfer;
+      }
+    });
+    destSlots.forEach((slot) => {
+      if (remaining <= 0) return;
+      if (!slot.id) {
+        const transfer = Math.min(maxStack, remaining);
+        slot.id = sourceSlot.id;
+        slot.count = transfer;
+        remaining -= transfer;
+      }
+    });
+    const moved = remaining !== sourceSlot.count;
+    if (moved) {
+      sourceSlot.count = remaining;
+      if (sourceSlot.count <= 0) {
+        sourceSlot.id = null;
+        sourceSlot.count = 0;
+      }
+    }
+    return moved;
   }
 }

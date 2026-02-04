@@ -193,6 +193,44 @@ export class WorldEventPanel {
   }
 }
 
+export class BuildPlanner {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+
+  draw(game) {
+    if (!game.build.active) return;
+    const blueprint = BUILDINGS[game.build.selected];
+    if (!blueprint) return;
+    const panelWidth = 220;
+    const panelHeight = 96;
+    const x = 18;
+    const y = game.view.height - panelHeight - 120;
+    const costText = Object.entries(blueprint.cost)
+      .map(([key, value]) => `${key} ${value}`)
+      .join(" · ");
+    const sizeText = blueprint.footprint ? `${blueprint.footprint.w}x${blueprint.footprint.h}` : "1x1";
+    const levelText = blueprint.unlockLevel ? `Lvl ${blueprint.unlockLevel}` : "Lvl 1";
+    this.ctx.save();
+    this.ctx.fillStyle = "rgba(255,255,255,0.78)";
+    this.ctx.fillRect(x, y, panelWidth, panelHeight);
+    this.ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    this.ctx.strokeRect(x, y, panelWidth, panelHeight);
+    drawItemIcon(this.ctx, game.build.selected, x + 12, y + 12, 2);
+    this.ctx.fillStyle = "rgba(15,20,23,0.85)";
+    this.ctx.font = "12px 'Manrope', sans-serif";
+    this.ctx.fillText(`Selected: ${game.build.selected}`, x + 44, y + 20);
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
+    this.ctx.fillText(`${sizeText} · ${levelText}`, x + 44, y + 36);
+    this.ctx.fillText(costText, x + 12, y + 58);
+    this.ctx.fillStyle = "rgba(15,20,23,0.5)";
+    this.ctx.fillText("Left click: place", x + 12, y + 78);
+    this.ctx.fillText("Right click: cancel", x + 120, y + 78);
+    this.ctx.restore();
+  }
+}
+
 export class BuildCatalog {
   constructor(ctx) {
     this.ctx = ctx;
@@ -214,7 +252,7 @@ export class BuildCatalog {
     });
     if (!entries.length) return;
     const padding = 10;
-    const lineHeight = 14;
+    const lineHeight = 18;
     const x = game.view.width - 210;
     const y = game.view.height - 220;
     this.ctx.save();
@@ -249,7 +287,7 @@ export class BuildCatalog {
     const width =
       Math.max(
         this.ctx.measureText(header).width,
-        ...lines.map((line) => this.ctx.measureText(line.text).width)
+        ...lines.map((line) => this.ctx.measureText(line.text).width + (line.header ? 0 : 18))
       ) + padding * 2;
     const height = (lines.length + 1) * lineHeight + padding * 2;
     this.ctx.fillStyle = "rgba(255,255,255,0.7)";
@@ -294,8 +332,9 @@ export class BuildCatalog {
         this.ctx.fillStyle = "rgba(47,111,79,0.2)";
         this.ctx.fillRect(x + 4, lineY - 10, width - 8, lineHeight);
       }
+      drawItemIcon(this.ctx, line.id, x + padding, lineY - 12, 2);
       this.ctx.fillStyle = line.locked ? "rgba(15,20,23,0.35)" : "rgba(15,20,23,0.8)";
-      this.ctx.fillText(line.text, x + padding, lineY);
+      this.ctx.fillText(line.text, x + padding + 18, lineY);
     });
     this.ctx.restore();
   }

@@ -83,11 +83,14 @@ function upsertPlayer(ctx: any, data: any) {
 }
 
 function upsertInput(ctx: any, data: any) {
-  const existing = ctx.db.player_input.id.find(data.id);
+  if (!data?.id) return;
+  const inputTable = ctx.db.player_input ?? ctx.db.playerInput;
+  if (!inputTable) return;
+  const existing = inputTable.id.find(data.id);
   if (existing) {
-    ctx.db.player_input.id.update({ ...existing, ...data });
+    inputTable.id.update({ ...existing, ...data });
   } else {
-    ctx.db.player_input.insert(data);
+    inputTable.insert(data);
   }
 }
 

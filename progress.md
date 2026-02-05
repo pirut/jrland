@@ -363,3 +363,6 @@ Test log:
 TODOs (next agent):
 - Toggle `REQUIRE_AUTH = true` in `backend/spacetimedb/src/index.ts` once auth is confirmed working in production.
 - Add UI hint explaining that `?net=spacetime` requires sign-in before connecting.
+
+Updates (2026-02-05, backend guard for input table):
+- Added a defensive guard in `backend/spacetimedb/src/index.ts` so `input_sample` doesn’t panic if `player_input` table handle is missing or payload is empty.

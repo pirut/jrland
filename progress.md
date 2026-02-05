@@ -350,3 +350,16 @@ Updates (2026-02-05, multi-window player visibility fix):
 
 Test log:
 - Ran Playwright client (3 iterations) after connection-id changes; screenshots/state captured in output/web-game (latest: shot-2-1770314472617.png, state-2-1770314472617.json).
+
+Updates (2026-02-05, SpacetimeAuth client wiring + cleanup):
+- Added SpacetimeAuth PKCE flow (`src/auth/spacetimeAuth.js`) and auth panel on the start menu.
+- App now stores `id_token` in localStorage and uses it as the SpacetimeDB token.
+- Default Spacetime endpoint remains Maincloud; auth status shown in menu.
+- Cleaned up `src/main.js` indentation/structure for auth wiring readability.
+
+Test log:
+- Ran Playwright client (3 iterations) after auth wiring; screenshots/state captured in output/web-game (latest: shot-2-1770315963451.png, state-2-1770315963451.json).
+
+TODOs (next agent):
+- Toggle `REQUIRE_AUTH = true` in `backend/spacetimedb/src/index.ts` once auth is confirmed working in production.
+- Add UI hint explaining that `?net=spacetime` requires sign-in before connecting.

@@ -1,4 +1,4 @@
-import { schema, table, t } from 'spacetimedb/server';
+import { schema, table, t, SenderError } from 'spacetimedb/server';
 
 const playerTable = table(
   { name: 'player', public: true },
@@ -59,8 +59,18 @@ const worldTable = table(
 
 export const spacetimedb = schema(playerTable, inputTable, chatTable, worldTable);
 
+const REQUIRE_AUTH = false;
+
 function nowMillis(ctx: { timestamp: { toMillis(): bigint } }) {
   return Number(ctx.timestamp.toMillis());
+}
+
+function ensureAuth(ctx: any) {
+  if (!REQUIRE_AUTH) return null;
+  if (!ctx.senderAuth?.jwt) {
+    throw new SenderError('Authentication required');
+  }
+  return ctx.senderAuth.jwt;
 }
 
 function upsertPlayer(ctx: any, data: any) {
@@ -94,6 +104,7 @@ spacetimedb.init((ctx) => {
 });
 
 spacetimedb.clientConnected((ctx) => {
+  ensureAuth(ctx);
   const id = ctx.connectionId?.toHexString?.() ?? ctx.identity.toHexString();
   const identity = ctx.identity.toHexString();
   const now = nowMillis(ctx);
@@ -113,6 +124,9 @@ spacetimedb.clientConnected((ctx) => {
 });
 
 spacetimedb.clientDisconnected((ctx) => {
+  if (REQUIRE_AUTH && !ctx.senderAuth?.jwt) {
+    return;
+  }
   const id = ctx.connectionId?.toHexString?.() ?? ctx.identity.toHexString();
   const existing = ctx.db.player.id.find(id);
   if (existing) {
@@ -143,6 +157,7 @@ spacetimedb.reducer(
     region: t.string(),
   },
   (ctx, payload) => {
+    ensureAuth(ctx);
     const id = ctx.connectionId?.toHexString?.() ?? ctx.identity.toHexString();
     const identity = ctx.identity.toHexString();
     const now = nowMillis(ctx);
@@ -184,6 +199,7 @@ spacetimedb.reducer(
     message: t.string(),
   },
   (ctx, { message }) => {
+    ensureAuth(ctx);
     const id = ctx.identity.toHexString();
     ctx.db.chat.insert({
       sender: id,
@@ -199,6 +215,7 @@ spacetimedb.reducer(
     seed: t.u32(),
   },
   (ctx, { seed }) => {
+    ensureAuth(ctx);
     const existing = ctx.db.world.id.find('world');
     const now = nowMillis(ctx);
     if (existing) {

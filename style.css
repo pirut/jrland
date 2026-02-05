@@ -327,6 +327,42 @@ body::after {
   border: 1px solid rgba(15, 20, 23, 0.08);
 }
 
+.auth-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(15, 20, 23, 0.08);
+}
+
+.auth-status {
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+}
+
+.auth-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button.secondary {
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+button.secondary:hover {
+  box-shadow: 0 8px 18px rgba(47, 111, 79, 0.18);
+}
+
+.auth-note {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+}
+
 .seed-control {
   margin-bottom: 18px;
   font-size: 0.9rem;

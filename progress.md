@@ -366,3 +366,6 @@ TODOs (next agent):
 
 Updates (2026-02-05, backend guard for input table):
 - Added a defensive guard in `backend/spacetimedb/src/index.ts` so `input_sample` doesn’t panic if `player_input` table handle is missing or payload is empty.
+
+Updates (2026-02-05, player schema migration safety):
+- Moved `identity` to the end of the `player` table and added a default value to avoid manual migration errors.

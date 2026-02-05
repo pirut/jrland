@@ -4,7 +4,6 @@ const playerTable = table(
   { name: 'player', public: true },
   {
     id: t.string().primaryKey(),
-    identity: t.string().index(),
     name: t.string(),
     x: t.f32(),
     y: t.f32(),
@@ -14,6 +13,7 @@ const playerTable = table(
     region: t.string().index(),
     connected: t.bool(),
     lastSeen: t.f64(),
+    identity: t.string().index().default(''),
   }
 );
 

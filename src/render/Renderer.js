@@ -527,6 +527,34 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  drawRemotePlayers(game, tileSize, bounds) {
+    if (!game.remotePlayers || game.remotePlayers.size === 0) return;
+    this.ctx.save();
+    this.ctx.strokeStyle = "rgba(120, 200, 220, 0.8)";
+    this.ctx.fillStyle = "rgba(70, 120, 140, 0.85)";
+    this.ctx.lineWidth = 2;
+    game.remotePlayers.forEach((player) => {
+      if (
+        player.x < bounds.minX ||
+        player.x > bounds.maxX ||
+        player.y < bounds.minY ||
+        player.y > bounds.maxY
+      ) {
+        return;
+      }
+      const px = (player.x - bounds.minX) * tileSize;
+      const py = (player.y - bounds.minY) * tileSize;
+      const radius = tileSize * 0.3;
+      this.ctx.beginPath();
+      this.ctx.arc(px, py, radius, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.beginPath();
+      this.ctx.arc(px, py, radius * 0.6, 0, Math.PI * 2);
+      this.ctx.stroke();
+    });
+    this.ctx.restore();
+  }
+
   drawPlayer(game, tileSize, bounds) {
     const px = (game.player.x - bounds.minX) * tileSize;
     const py = (game.player.y - bounds.minY) * tileSize;
@@ -617,6 +645,7 @@ export class Renderer {
     this.drawDens(game, tileSize, bounds);
     this.drawCarcasses(game, tileSize, bounds);
     this.drawCreatures(game, tileSize, bounds);
+    this.drawRemotePlayers(game, tileSize, bounds);
     this.drawBuildPreview(game, tileSize, bounds);
     this.drawMoveTarget(game, tileSize, bounds);
     this.drawInteractionHighlight(game, tileSize, bounds);
@@ -642,7 +671,6 @@ export class Renderer {
     const season = game.season?.name ?? "unknown";
     const drought = game.season?.drought ? "Yes" : "No";
     return [
-      `Seed ${game.seed}`,
       `Time ${formatClock(game.timeOfDay)}`,
       `Phase ${phase}`,
       `Biome ${biome}`,

@@ -1,8 +1,9 @@
 export class ChatSystem {
-  constructor() {
+  constructor({ onMessage } = {}) {
     this.messages = [];
     this.open = false;
     this.input = "";
+    this.onMessage = onMessage ?? null;
   }
 
   toggle(open) {
@@ -20,10 +21,14 @@ export class ChatSystem {
     this.toggle(false);
   }
 
-  addMessage(text, author = "You") {
+  addMessage(text, author = "You", { emit = true } = {}) {
     if (!text) return;
-    this.messages.push({ text, author, time: Date.now() });
+    const message = { text, author, time: Date.now() };
+    this.messages.push(message);
     if (this.messages.length > 50) this.messages.shift();
+    if (emit && this.onMessage) {
+      this.onMessage(message);
+    }
   }
 
   handleKey(event) {

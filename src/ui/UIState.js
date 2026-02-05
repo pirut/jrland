@@ -9,6 +9,7 @@ export class UIState {
     this.showChat = true;
     this.showDebug = true;
     this.showProgress = true;
+    this.showNetStatus = true;
     this.inventoryOpen = false;
     this.activeHotbarIndex = 0;
     this.cursorItem = null;

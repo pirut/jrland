@@ -892,3 +892,43 @@ export class DebugPanel {
     this.ctx.restore();
   }
 }
+
+export class NetStatus {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+
+  draw(game) {
+    if (!game.ui.showNetStatus) return;
+    const status = game.net?.getStatus?.() ?? { connected: false, mode: "local", regionId: "local" };
+    const label = status.connected ? "Online" : "Offline";
+    const ping =
+      typeof status.pingMs === "number" && Number.isFinite(status.pingMs)
+        ? `${Math.round(status.pingMs)}ms`
+        : "--";
+    const region = status.regionId ?? "local";
+    const mode = status.mode ?? "local";
+    const text = `Net ${label} · ${ping} · ${region} · ${mode}`;
+    const debugLines =
+      game.ui.showDebug && game.debug.enabled && game.renderer?.getDebugLines
+        ? game.renderer.getDebugLines(game)
+        : [];
+    const padding = 8;
+    const lineHeight = 14;
+    const debugHeight =
+      debugLines.length > 0 ? debugLines.length * lineHeight + padding * 2 - 4 : 0;
+    this.ctx.save();
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    const width = this.ctx.measureText(text).width + padding * 2;
+    const x = game.view.width - width - 18;
+    const y = 18 + (debugHeight > 0 ? debugHeight + 8 : 0);
+    const height = 18;
+    this.ctx.fillStyle = status.connected ? "rgba(255,255,255,0.72)" : "rgba(255, 214, 214, 0.8)";
+    this.ctx.fillRect(x, y, width, height);
+    this.ctx.strokeStyle = "rgba(0,0,0,0.18)";
+    this.ctx.strokeRect(x, y, width, height);
+    this.ctx.fillStyle = "rgba(15,20,23,0.75)";
+    this.ctx.fillText(text, x + padding, y + 13);
+    this.ctx.restore();
+  }
+}

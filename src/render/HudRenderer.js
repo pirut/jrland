@@ -13,6 +13,7 @@ import {
   ChatOverlay,
   InventoryOverlay,
   DebugPanel,
+  NetStatus,
 } from "../ui/hudComponents.js";
 
 export class HudRenderer {
@@ -33,6 +34,7 @@ export class HudRenderer {
       new ChatOverlay(ctx),
       new InventoryOverlay(ctx),
       new DebugPanel(ctx),
+      new NetStatus(ctx),
     ];
   }
 

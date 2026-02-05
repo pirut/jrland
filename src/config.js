@@ -17,7 +17,7 @@ export const CONFIG = {
 
 export const BUILDINGS = {
   campfire: {
-    cost: { wood: 2, stone: 1 },
+    cost: { wood: 2 },
     radius: 0.35,
     footprint: { w: 1, h: 1 },
     baseRadius: 0.35,

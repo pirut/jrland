@@ -1,6 +1,7 @@
 import { Game } from "./core/Game.js";
 import { CONFIG } from "./config.js";
 import { getHotbarLayout } from "./ui/hotbarLayout.js";
+import { SpacetimeNetAdapter } from "./net/SpacetimeNetAdapter.js";
 
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
@@ -9,60 +10,46 @@ const menuOverlay = document.getElementById("menu");
 const pauseOverlay = document.getElementById("pause");
 const startBtn = document.getElementById("start-btn");
 const resumeBtn = document.getElementById("resume-btn");
-const seedLabel = document.getElementById("seed-label");
-const seedInput = document.getElementById("seed-input");
-const seedRandomBtn = document.getElementById("seed-random");
 const optionInputs = Array.from(document.querySelectorAll("[data-ui]"));
+const DEFAULT_SEED = 1337;
 
-function getSeedFromUrl() {
+function getNetConfigFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  const seedParam = params.get("seed");
-  if (seedParam && !Number.isNaN(Number(seedParam))) {
-    return Number(seedParam);
-  }
-  return 1337;
+  const mode = params.get("net") ?? "local";
+  const endpointParam = params.get("endpoint");
+  return {
+    mode,
+    endpoint:
+      endpointParam ??
+      (mode === "spacetime" ? "https://maincloud.spacetimedb.com" : "ws://localhost:3000"),
+    regionId: params.get("region") ?? "region-0",
+    moduleName: params.get("module") ?? "jrland",
+    token: params.get("token") ?? null,
+  };
 }
 
-function updateSeedInUrl(seed) {
-  const params = new URLSearchParams(window.location.search);
-  params.set("seed", String(seed));
-  const newUrl = `${window.location.pathname}?${params.toString()}`;
-  window.history.replaceState({}, "", newUrl);
-}
-
-function generateRandomSeed() {
-  return Math.floor(Math.random() * 100000);
-}
-
-function sanitizeSeed(value, fallbackSeed) {
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isFinite(parsed)) return parsed;
-  return fallbackSeed;
-}
-
-function updateSeedLabel(seed) {
-  seedLabel.textContent = String(seed);
-  if (seedInput) seedInput.value = String(seed);
-}
-
-const seedControls = {
-  sanitizeSeed: () =>
-    sanitizeSeed(seedInput?.value ?? seedLabel.textContent ?? getSeedFromUrl(), getSeedFromUrl()),
-  onSeedChanged: (seed) => {
-    updateSeedLabel(seed);
-    updateSeedInUrl(seed);
-  },
-};
+const netConfig = getNetConfigFromUrl();
+const netAdapter =
+  netConfig.mode === "spacetime"
+    ? new SpacetimeNetAdapter({
+        endpoint: netConfig.endpoint,
+        regionId: netConfig.regionId,
+        moduleName: netConfig.moduleName,
+        token: netConfig.token,
+      })
+    : null;
 
 const game = new Game({
   ctx,
-  seed: getSeedFromUrl(),
+  seed: DEFAULT_SEED,
   overlays: { menu: menuOverlay, pause: pauseOverlay },
-  seedControls,
+  netAdapter,
 });
 
-updateSeedLabel(game.seed);
-updateSeedInUrl(game.seed);
+if (netAdapter?.connect) {
+  netAdapter.connect();
+}
+
 syncOptions();
 
 function syncOptions() {
@@ -155,11 +142,6 @@ function handleHotbarClick(x, y) {
 startBtn.addEventListener("click", () => game.startGame());
 startBtn.addEventListener("pointerdown", () => game.startGame());
 resumeBtn.addEventListener("click", () => game.togglePause());
-if (seedRandomBtn) {
-  seedRandomBtn.addEventListener("click", () => {
-    updateSeedLabel(generateRandomSeed());
-  });
-}
 
 window.startGame = () => game.startGame();
 
@@ -186,6 +168,7 @@ window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   if (key === "t" && game.mode === "playing") {
     game.chat.openChat();
+    game.emitAction("chat_open", {});
     return;
   }
   if (key === "i" && game.mode === "playing") {
@@ -194,34 +177,40 @@ window.addEventListener("keydown", (event) => {
       game.storage.close();
     }
     game.mode = game.ui.inventoryOpen ? "inventory" : "playing";
+    game.emitAction("toggle_inventory", { open: game.ui.inventoryOpen });
     return;
   }
   if (key === "enter" && game.mode === "playing") {
     game.ui.inventoryOpen = true;
     game.storage.close();
     game.mode = "inventory";
+    game.emitAction("toggle_inventory", { open: true });
     return;
   }
   if (key === "escape" && game.ui.inventoryOpen) {
     game.ui.inventoryOpen = false;
     game.storage.close();
     game.mode = "playing";
+    game.emitAction("toggle_inventory", { open: false });
     return;
   }
   if (key === "f") {
     event.preventDefault();
     toggleFullscreen();
+    game.emitAction("toggle_fullscreen", { on: Boolean(document.fullscreenElement) });
     return;
   }
   if (key === "`") {
     game.debug.enabled = !game.debug.enabled;
     game.notifications.push(game.debug.enabled ? "Debug HUD on" : "Debug HUD off");
+    game.emitAction("toggle_debug", { on: game.debug.enabled });
     return;
   }
   if (key === "c" && !game.input.isDown("c")) {
     if (game.mode === "playing") {
       game.ui.inventoryOpen = true;
       game.mode = "inventory";
+      game.emitAction("toggle_inventory", { open: true, source: "craft" });
     }
     return;
   }
@@ -229,29 +218,19 @@ window.addEventListener("keydown", (event) => {
     if (game.mode === "playing") {
       game.build.active = !game.build.active;
       game.notifications.push(game.build.active ? "Build mode on" : "Build mode off");
+      game.emitAction("toggle_build", { on: game.build.active });
     }
     return;
   }
   if (key === "q" && game.mode === "playing" && game.build.active) {
     game.build.rotate();
     game.notifications.push("Rotated blueprint");
-    return;
-  }
-  if ((key === "1" || key === "2" || key === "3" || key === "4") && game.mode === "playing") {
-    const map = {
-      "1": "campfire",
-      "2": "shelter",
-      "3": "workbench",
-      "4": "hut",
-    };
-    const selected = map[key];
-    if (selected) {
-      game.selectBuild(selected);
-    }
+    game.emitAction("rotate_build", { rotation: game.build.rotation ?? 0 });
     return;
   }
   if (/^[1-9]$/.test(key) && game.mode === "playing") {
     game.ui.activeHotbarIndex = Number(key) - 1;
+    game.syncBuildSelection();
   }
   if (key === "p" && !game.input.isDown("p")) {
     event.preventDefault();
@@ -267,11 +246,13 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
   }
   game.input.press(key);
+  game.emitAction("input_down", { key });
 });
 
 window.addEventListener("keyup", (event) => {
   const key = event.key.toLowerCase();
   game.input.release(key);
+  game.emitAction("input_up", { key });
 });
 
 canvas.addEventListener("mouseenter", () => {
@@ -291,6 +272,12 @@ canvas.addEventListener("mousemove", (event) => {
   const world = game.screenToWorld(x, y);
   game.ui.mouseWorldX = world.x;
   game.ui.mouseWorldY = world.y;
+  if (game.mode === "playing") {
+    game.emitAction("pointer_move", {
+      x: Number(world.x.toFixed(2)),
+      y: Number(world.y.toFixed(2)),
+    });
+  }
 });
 
 canvas.addEventListener("mousedown", (event) => {
@@ -303,16 +290,24 @@ canvas.addEventListener("mousedown", (event) => {
 
   if (game.ui.inventoryOpen) {
     game.inventoryUI.handleClick(game, x, y, event.button, { shiftKey: event.shiftKey });
+    game.emitAction("ui_click", {
+      button: event.button,
+      x: Number(x.toFixed(1)),
+      y: Number(y.toFixed(1)),
+      shift: event.shiftKey,
+    });
     return;
   }
 
   if (game.mode !== "playing") return;
 
   if (game.build.active && handleBuildCatalogClick(x, y)) {
+    game.emitAction("build_catalog_click", { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) });
     return;
   }
 
   if (handleHotbarClick(x, y)) {
+    game.emitAction("hotbar_click", { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) });
     return;
   }
 
@@ -320,10 +315,12 @@ canvas.addEventListener("mousedown", (event) => {
     if (event.button === 2) {
       game.build.active = false;
       game.notifications.push("Build mode off");
+      game.emitAction("toggle_build", { on: false });
       return;
     }
     if (event.button === 0) {
       game.attemptBuild();
+      game.emitAction("build_click", { x: Number(world.x.toFixed(2)), y: Number(world.y.toFixed(2)) });
       return;
     }
   }
@@ -337,6 +334,7 @@ canvas.addEventListener("mousedown", (event) => {
     } else if (!game.attemptInteract()) {
       game.attemptGather();
     }
+    game.emitAction("right_click", { x: Number(world.x.toFixed(2)), y: Number(world.y.toFixed(2)) });
     return;
   }
 
@@ -344,6 +342,7 @@ canvas.addEventListener("mousedown", (event) => {
     if (game.world.tileType(Math.floor(world.x), Math.floor(world.y)) !== "water") {
       game.setMoveTarget(world.x, world.y);
     }
+    game.emitAction("left_click", { x: Number(world.x.toFixed(2)), y: Number(world.y.toFixed(2)) });
   }
 });
 
@@ -358,6 +357,7 @@ canvas.addEventListener("wheel", (event) => {
   const next = (game.ui.activeHotbarIndex + delta + 9) % 9;
   game.ui.activeHotbarIndex = next;
   game.syncBuildSelection();
+  game.emitAction("hotbar_scroll", { index: next, delta });
 });
 
 window.addEventListener("fullscreenchange", resizeCanvas);

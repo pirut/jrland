@@ -15,6 +15,7 @@ import { SeasonSystem } from "../systems/SeasonSystem.js";
 import { Renderer } from "../render/Renderer.js";
 import { HudRenderer } from "../render/HudRenderer.js";
 import { InputController } from "../core/InputController.js";
+import { LocalNetAdapter } from "../net/LocalNetAdapter.js";
 import { clamp, lerp } from "../utils/math.js";
 import { UIState } from "../ui/UIState.js";
 import { InventoryUI } from "../ui/InventoryUI.js";
@@ -24,10 +25,14 @@ export class Game {
     ctx,
     seed,
     overlays,
-    seedControls,
+    netAdapter,
   }) {
     this.mode = "menu";
     this.seed = seed;
+    this.simTick = 0;
+    this.simTime = 0;
+    this.inputSampleTimer = 0;
+    this.inputSampleInterval = 1 / 20;
     this.view = { width: 0, height: 0 };
     this.camera = { x: 0, y: 0 };
     this.world = new World(seed);
@@ -37,7 +42,11 @@ export class Game {
     this.craftingGrid = Array.from({ length: 4 }, () => ({ id: null, count: 0 }));
     this.weather = new WeatherSystem(seed);
     this.notifications = new NotificationCenter();
-    this.chat = new ChatSystem();
+    this.chat = new ChatSystem({
+      onMessage: (message) => {
+        this.emitAction("chat", message);
+      },
+    });
     this.progression = new Progression();
     this.quests = new QuestSystem();
     this.creatures = new CreatureSystem(this.world);
@@ -47,7 +56,11 @@ export class Game {
     this.input = new InputController();
     this.renderer = new Renderer(ctx);
     this.hudRenderer = new HudRenderer(ctx);
-    this.seedControls = seedControls;
+    this.net = netAdapter ?? new LocalNetAdapter();
+    this.net.bind?.(this);
+    this.playerId = this.net.playerId ?? "local-player";
+    this.remotePlayers = new Map();
+    this.seedControls = null;
     this.ui = new UIState();
     this.inventoryUI = new InventoryUI();
     this.gear = { axe: "none", pick: "none", weapon: "none", armor: "none", backpack: false };
@@ -68,8 +81,84 @@ export class Game {
     this.debug = { enabled: true };
     this.lastUpdate = performance.now();
     this.overlays = overlays;
-    this.seedControls = seedControls;
     this.resetWorld(seed);
+  }
+
+  emitAction(type, payload = {}) {
+    if (!type) return;
+    const action = {
+      type,
+      payload,
+      tick: this.simTick,
+      time: Number(this.simTime.toFixed(3)),
+      playerId: this.playerId,
+    };
+    this.net.recordAction(action);
+  }
+
+  setRemotePlayers(players = []) {
+    this.remotePlayers.clear();
+    players.forEach((player) => {
+      if (!player?.id || player.id === this.playerId) return;
+      this.remotePlayers.set(player.id, { ...player });
+    });
+  }
+
+  getInputSnapshot() {
+    const relevantKeys = [
+      "w",
+      "a",
+      "s",
+      "d",
+      "shift",
+      " ",
+      "space",
+      "e",
+      "r",
+      "b",
+      "q",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+    ];
+    const keys = relevantKeys.filter((key) => this.input.isDown(key));
+    const moveTarget = this.player.moveTarget
+      ? {
+          x: Number(this.player.moveTarget.x.toFixed(2)),
+          y: Number(this.player.moveTarget.y.toFixed(2)),
+        }
+      : null;
+    const pointer = this.ui.pointerInCanvas
+      ? {
+          x: Number(this.ui.mouseWorldX.toFixed(2)),
+          y: Number(this.ui.mouseWorldY.toFixed(2)),
+        }
+      : null;
+    return {
+      keys,
+      moveTarget,
+      pointer,
+      build: {
+        active: this.build.active,
+        selected: this.build.selected,
+        rotation: this.build.rotation ?? 0,
+      },
+      mode: this.mode,
+      inventoryOpen: this.ui.inventoryOpen,
+      player: {
+        x: Number(this.player.x.toFixed(2)),
+        y: Number(this.player.y.toFixed(2)),
+        health: Number(this.player.health.toFixed(1)),
+        hunger: Number(this.player.hunger.toFixed(1)),
+        stamina: Number(this.player.stamina.toFixed(1)),
+      },
+    };
   }
 
   setViewSize(width, height) {
@@ -84,6 +173,9 @@ export class Game {
     this.season.reset(seed);
     this.timeOfDay = 0.25;
     this.externalTime = false;
+    this.simTick = 0;
+    this.simTime = 0;
+    this.inputSampleTimer = 0;
     this.lastUpdate = performance.now();
     this.inventory.reset();
     this.progression.reset();
@@ -117,9 +209,6 @@ export class Game {
     this.player.reset(spawn);
     this.camera.x = spawn.x;
     this.camera.y = spawn.y;
-    if (this.seedControls?.onSeedChanged) {
-      this.seedControls.onSeedChanged(seed);
-    }
   }
 
   seedStarterItems() {
@@ -209,6 +298,7 @@ export class Game {
       return;
     }
     this.build.selected = id;
+    this.emitAction("select_build", { id });
     const slotIndex = this.inventory.slots.findIndex((slot) => slot.id === id);
     if (slotIndex >= 0) this.ui.activeHotbarIndex = slotIndex;
     this.notifications.push(`Selected ${id}`);
@@ -216,6 +306,10 @@ export class Game {
 
   setMoveTarget(worldX, worldY) {
     this.player.moveTarget = { x: worldX, y: worldY };
+    this.emitAction("move_target", {
+      x: Number(worldX.toFixed(2)),
+      y: Number(worldY.toFixed(2)),
+    });
   }
 
   useActiveItem() {
@@ -230,6 +324,7 @@ export class Game {
         slot.count = 0;
       }
       this.notifications.push(`Ate ${item.name}`);
+      this.emitAction("consume_item", { id: slot.id, count: 1 });
     }
   }
 
@@ -261,6 +356,7 @@ export class Game {
   attemptAttack() {
     if (this.player.attackCooldown > 0) return;
     const hit = this.creatures.attack(this, this.gear.weapon);
+    this.emitAction("attack", { weapon: this.gear.weapon, hit });
     if (hit) {
       this.player.attackCooldown = 0.45;
     }
@@ -277,6 +373,13 @@ export class Game {
     }
     const target = this.creatures.findNearestAt(worldX, worldY, 0.8);
     const hit = this.creatures.attack(this, this.gear.weapon, target);
+    this.emitAction("attack", {
+      weapon: this.gear.weapon,
+      hit,
+      targetId: target?.id ?? null,
+      x: Number(worldX.toFixed(2)),
+      y: Number(worldY.toFixed(2)),
+    });
     if (hit) {
       this.player.attackCooldown = 0.45;
     }
@@ -307,20 +410,22 @@ export class Game {
   }
 
   startGame() {
-    const seedValue = this.seedControls.sanitizeSeed();
-    this.resetWorld(seedValue);
+    this.resetWorld(this.seed);
     this.mode = "playing";
     this.toggleOverlay("menu", false);
     this.toggleOverlay("pause", false);
+    this.emitAction("start_game", { seed: this.seed });
   }
 
   togglePause() {
     if (this.mode === "playing") {
       this.mode = "paused";
       this.toggleOverlay("pause", true);
+      this.emitAction("pause", { paused: true });
     } else if (this.mode === "paused") {
       this.mode = "playing";
       this.toggleOverlay("pause", false);
+      this.emitAction("pause", { paused: false });
     }
   }
 
@@ -401,11 +506,13 @@ export class Game {
   attemptGather() {
     if (this.player.gatherCooldown > 0) {
       this.notifications.push("Gather cooling down");
+      this.emitAction("gather", { ok: false, reason: "cooldown" });
       return;
     }
     const found = this.world.findNearestResource(this.player.x, this.player.y, CONFIG.gatherRange);
     if (!found) {
       this.notifications.push("No resource in range");
+      this.emitAction("gather", { ok: false, reason: "none" });
       return;
     }
     let baseYield = 1;
@@ -427,6 +534,7 @@ export class Game {
     const maxStack = ITEMS[itemId]?.maxStack ?? 32;
     if (!this.inventory.canAdd(itemId, yieldAmount, maxStack)) {
       this.notifications.push("Inventory full");
+      this.emitAction("gather", { ok: false, reason: "full", itemId });
       return;
     }
     const respawnConfig = CONFIG.resourceRespawn?.[found.entity.type];
@@ -456,6 +564,7 @@ export class Game {
     }
     this.resolveQuestCompletions();
     this.player.gatherCooldown = CONFIG.gatherCooldown;
+    this.emitAction("gather", { ok: true, itemId, count: yieldAmount });
   }
 
   attemptInteract() {
@@ -472,23 +581,27 @@ export class Game {
           this.awardXp(PROGRESSION.xp.cook);
           this.quests.onCook("cooked_meat", 1);
           this.resolveQuestCompletions();
+          this.emitAction("interact", { type: "campfire", action: "cook" });
         } else {
           this.notifications.push("Inventory full");
         }
       } else {
         this.player.consume({ health: 12, stamina: 18, hunger: 6 });
         this.notifications.push("Warmed up at the campfire");
+        this.emitAction("interact", { type: "campfire", action: "rest" });
       }
       return true;
     }
     if (structure.type === "shelter") {
       this.player.consume({ stamina: 30, hunger: 4 });
       this.notifications.push("Rested in the shelter");
+      this.emitAction("interact", { type: "shelter", action: "rest" });
       return true;
     }
     if (structure.type === "lean_to") {
       this.player.consume({ stamina: 18, hunger: 2 });
       this.notifications.push("Rested under the lean-to");
+      this.emitAction("interact", { type: "lean_to", action: "rest" });
       return true;
     }
     if (structure.type === "workbench") {
@@ -496,6 +609,7 @@ export class Game {
       this.ui.inventoryOpen = true;
       this.mode = "inventory";
       this.notifications.push("Workbench ready");
+      this.emitAction("interact", { type: "workbench", action: "open" });
       return true;
     }
     if (structure.type === "storage_crate") {
@@ -503,17 +617,20 @@ export class Game {
       this.ui.inventoryOpen = true;
       this.mode = "inventory";
       this.notifications.push("Storage opened");
+      this.emitAction("interact", { type: "storage_crate", action: "open" });
       return true;
     }
     if (structure.type === "wood_gate") {
       structure.open = !structure.open;
       this.notifications.push(structure.open ? "Gate opened" : "Gate closed");
+      this.emitAction("interact", { type: "wood_gate", action: structure.open ? "open" : "close" });
       return true;
     }
     if (structure.type === "hut") {
       this.player.consume({ health: 20, stamina: 40, hunger: 8 });
       this.timeOfDay = 0.25;
       this.notifications.push("Slept until morning");
+      this.emitAction("interact", { type: "hut", action: "sleep" });
       return true;
     }
     return false;
@@ -529,19 +646,23 @@ export class Game {
     const preview = this.build.preview;
     if (!preview || !preview.valid) {
       this.notifications.push(preview?.reason || "Can't build here");
+      this.emitAction("build", { ok: false, reason: preview?.reason || "invalid" });
       return;
     }
     const blueprint = BUILDINGS[this.build.selected];
     if (!blueprint) {
       this.notifications.push("No blueprint selected");
+      this.emitAction("build", { ok: false, reason: "no_blueprint" });
       return;
     }
     if (!this.isBuildUnlocked(this.build.selected)) {
       this.notifications.push(`Requires level ${blueprint.unlockLevel}`);
+      this.emitAction("build", { ok: false, reason: "locked" });
       return;
     }
     if (!this.inventory.canAfford(blueprint.cost)) {
       this.notifications.push("Need more resources");
+      this.emitAction("build", { ok: false, reason: "cost" });
       return;
     }
     this.inventory.spend(blueprint.cost);
@@ -557,10 +678,29 @@ export class Game {
     this.awardXp(PROGRESSION.xp.build);
     this.quests.onBuild(this.build.selected);
     this.resolveQuestCompletions();
+    this.emitAction("build", {
+      ok: true,
+      id: this.build.selected,
+      originX: Number(preview.originX.toFixed(2)),
+      originY: Number(preview.originY.toFixed(2)),
+      w: preview.w,
+      h: preview.h,
+      rotation: preview.rotation ?? 0,
+    });
   }
 
   update(dt) {
     if (this.mode !== "playing") return;
+    this.simTick += 1;
+    this.simTime += dt;
+    this.net.update(dt);
+    this.inputSampleTimer += dt;
+    if (this.inputSampleTimer >= this.inputSampleInterval) {
+      while (this.inputSampleTimer >= this.inputSampleInterval) {
+        this.inputSampleTimer -= this.inputSampleInterval;
+      }
+      this.emitAction("input_sample", this.getInputSnapshot());
+    }
     this.player.updateCooldown(dt);
     this.refreshEquipmentFromInventory();
     this.syncBuildSelection();
@@ -659,7 +799,12 @@ export class Game {
     const biomeBandName = this.world.biomeBand(Math.floor(this.player.x), Math.floor(this.player.y));
     const payload = {
       mode: this.mode,
-      seed: this.seed,
+      playerId: this.playerId,
+      sim: {
+        tick: this.simTick,
+        time: Number(this.simTime.toFixed(3)),
+      },
+      net: this.net.getStatus(),
       coord: "Origin (0,0) near initial spawn. +x east, +y south. Units = tiles.",
       timeOfDay: Number(this.timeOfDay.toFixed(3)),
       isNight: this.isNight,
@@ -740,6 +885,7 @@ export class Game {
       resources: resources.slice(0, 60),
       creatures: creatures.slice(0, 20).map((creature) => ({
         type: creature.type,
+        id: creature.id,
         x: Number(creature.x.toFixed(2)),
         y: Number(creature.y.toFixed(2)),
         health: Number(creature.health.toFixed(1)),
@@ -773,6 +919,7 @@ export class Game {
       interaction: this.interaction.target
         ? {
             type: this.interaction.target.type,
+            id: this.interaction.target.id,
             x: Number(this.interaction.target.x.toFixed(2)),
             y: Number(this.interaction.target.y.toFixed(2)),
             inRange: this.interaction.inRange,
@@ -780,6 +927,20 @@ export class Game {
             kind: this.interaction.kind,
           }
         : null,
+      players: {
+        self: {
+          id: this.playerId,
+          x: Number(this.player.x.toFixed(2)),
+          y: Number(this.player.y.toFixed(2)),
+        },
+        remotes: Array.from(this.remotePlayers.values()).map((player) => ({
+          id: player.id,
+          x: Number((player.x ?? 0).toFixed(2)),
+          y: Number((player.y ?? 0).toFixed(2)),
+          health: Number((player.health ?? 0).toFixed(1)),
+          name: player.name ?? null,
+        })),
+      },
       build: {
         active: this.build.active,
         selected: this.build.selected,

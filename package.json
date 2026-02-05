@@ -1,0 +1,23 @@
+{
+  "name": "jrland",
+  "version": "1.0.0",
+  "description": "",
+  "main": "game.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "playwright": "^1.58.1",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "spacetimedb": "^1.12.0"
+  }
+}

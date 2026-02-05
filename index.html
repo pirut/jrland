@@ -30,15 +30,7 @@
             <div>Pause: P</div>
             <div>Toggle Debug: `</div>
           </div>
-          <div class="seed-control">
-            <label for="seed-input">World Seed</label>
-            <div class="seed-row">
-              <input id="seed-input" type="number" inputmode="numeric" />
-              <button id="seed-random" type="button">Randomize</button>
-            </div>
-          </div>
           <button id="start-btn">Enter World</button>
-          <div class="seed">Seed: <span id="seed-label"></span></div>
         </div>
       </div>
       <div id="pause" class="overlay" aria-hidden="true">
@@ -56,6 +48,7 @@
             <label><input type="checkbox" data-ui="showChat" checked /> Chat</label>
             <label><input type="checkbox" data-ui="showProgress" checked /> Progress Bar</label>
             <label><input type="checkbox" data-ui="showDebug" checked /> Debug Panel</label>
+            <label><input type="checkbox" data-ui="showNetStatus" checked /> Net Status</label>
           </div>
           <button id="resume-btn">Resume</button>
         </div>

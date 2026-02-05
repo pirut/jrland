@@ -259,3 +259,94 @@ Test log:
 TODOs (next agent):
 - Surface season effects to players via a small HUD icon or tooltip.
 - Consider exposing a debug toggle to show trail/path overlays if needed.
+
+Updates (2026-02-04, MMO wiring + plan):
+- Added client-side net adapter layer (`LocalNetAdapter`) and `Game.emitAction` to capture player inputs/actions for future server wiring.
+- `render_game_to_text` now includes net status, sim tick/time, playerId, remote player list, and creature/interaction IDs.
+- Added remote player rendering stub so future multiplayer snapshots are visible on the client.
+- Added MMO architecture plan and SpacetimeDB mapping doc at `docs/mmo-plan.md`.
+
+Test log:
+- Ran Playwright client (3 iterations) after net adapter + remote render changes; screenshots/state captured in output/web-game (latest: shot-2-1770248971338.png, state-2-1770248971338.json).
+
+TODOs (next agent):
+- Add `SpacetimeNetAdapter` stub class with a no-op connection config to match target backend shape.
+- Add input sampling at fixed rate (e.g., 20hz) so action stream is stable under high frame rates.
+- Add a small “net status” indicator in HUD (connected, ping, region id).
+
+Updates (2026-02-04, spacetime stub + net HUD + input sampling):
+- Added `SpacetimeNetAdapter` stub with endpoint/region config and snapshot application hooks.
+- Added fixed-rate input sampling (20hz) and `input_sample` action payload for stable networking.
+- Added HUD net status panel (online/ping/region/mode) toggleable via pause menu.
+- Added URL params to select net mode and endpoint (`?net=spacetime&endpoint=ws://localhost:3000&region=region-0`).
+
+Test log:
+- Ran Playwright client (3 iterations) after net HUD/input sampling changes; screenshots/state captured in output/web-game (latest: shot-2-1770298005207.png, state-2-1770298005207.json).
+
+TODOs (next agent):
+- Replace `SpacetimeNetAdapter.connect()` with actual SpacetimeDB client wiring and snapshot subscription.
+- Feed authoritative snapshots into `game.setRemotePlayers()` and optionally `game.resetWorld()` for server-authoritative seed/state.
+- Add client-side interpolation for remote player positions if snapshots are sparse.
+
+Updates (2026-02-05, SpacetimeDB local setup + client wiring):
+- Installed SpacetimeDB CLI locally and initialized a TypeScript module at `backend/spacetimedb` (project name `jrland`).
+- Generated client bindings into `src/module_bindings` and installed the JS SDK.
+- Added Vite dev server scripts and dependency for proper ESM bundling.
+- Wired `SpacetimeNetAdapter` to actual SDK connection (`DbConnection.builder()`), with URL params for module and token.
+- Added adapter status fields (moduleName, lastError) to net status payload.
+
+Local server test:
+- Started `spacetime start --in-memory` and published module `jrland` to `http://localhost:3000` (identity created).
+
+Test log:
+- Ran Playwright client (3 iterations) via Vite after SDK wiring; screenshots/state captured in output/web-game (latest: shot-2-1770299487598.png, state-2-1770299487598.json).
+
+TODOs (next agent):
+- Add reducers in `backend/spacetimedb/src` for player input + snapshots.
+- Subscribe client to tables and map rows into `game.setRemotePlayers()`.
+- Replace `input_sample` action emission with reducer calls once schema is finalized.
+
+Updates (2026-02-05, SpacetimeDB schema + reducers + subscriptions):
+- Replaced backend module schema with `player`, `player_input`, `chat`, and `world` tables in `backend/spacetimedb/src/index.ts`.
+- Added reducers: `input_sample`, `send_chat`, and `set_seed` plus connect/disconnect hooks to manage player rows.
+- Regenerated client bindings (`src/module_bindings`) to match new schema.
+- Wired `SpacetimeNetAdapter` to call reducers, subscribe to player/chat tables, and sync remote players from the client cache.
+- Added input snapshot payload (player stats + pointers) to support reducer writes.
+
+Test log:
+- Pending: rerun Playwright after schema changes.
+
+TODOs (next agent):
+- Add server-side validation and authoritative simulation (move/gather/build/attack).
+- Add delta snapshots for resources/structures once those tables are authored.
+
+Updates (2026-02-05, build system fixes):
+- Removed conflicting numeric build hotkeys; number keys now correctly select hotbar slots and sync build selection.
+- Campfire cost now wood-only so early builds work without stone.
+
+Test log:
+- Ran Playwright client (3 iterations) after build hotkey fix; screenshots/state captured in output/web-game (latest: shot-2-1770301540295.png, state-2-1770301540295.json).
+
+TODOs (next agent):
+- Add explicit build tutorial or hint to toggle build mode with B and place with left click.
+
+Updates (2026-02-05, remove seed + default Maincloud endpoint):
+- Removed seed UI and URL handling; world now uses a fixed seed internally and defers to server world table when on Spacetime.
+- Default Spacetime endpoint now points to Maincloud when `net=spacetime` is set.
+- Net adapter now syncs world seed from the server and resets world when it changes.
+- Debug HUD no longer prints seed.
+
+Test log:
+- Ran Playwright client (3 iterations) after seed removal; screenshots/state captured in output/web-game (latest: shot-2-1770313201479.png, state-2-1770313201479.json).
+
+TODOs (next agent):
+- Add a dedicated persistent world identifier in the backend (replace seed usage in future).
+
+Updates (2026-02-05, multi-window player visibility fix):
+- Player rows are now keyed by connection ID instead of identity, so each tab gets a distinct player.
+- Added `identity` column to player table for auditing while keeping `id` unique per connection.
+- Client now uses connectionId for its playerId and includes identityId in net status.
+- Regenerated bindings to match new schema.
+
+Test log:
+- Ran Playwright client (3 iterations) after connection-id changes; screenshots/state captured in output/web-game (latest: shot-2-1770314472617.png, state-2-1770314472617.json).

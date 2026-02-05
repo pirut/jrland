@@ -1,0 +1,436 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&display=swap");
+
+:root {
+  color-scheme: only light;
+  --ink: #0f1417;
+  --ink-muted: #4c5c66;
+  --panel: rgba(255, 255, 255, 0.86);
+  --panel-border: rgba(15, 20, 23, 0.12);
+  --accent: #2f6f4f;
+  --accent-strong: #1e5940;
+  --accent-soft: #cfe4d8;
+  --shadow: rgba(13, 20, 24, 0.18);
+  --glow: rgba(255, 255, 255, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: radial-gradient(circle at top, #eef1eb 0%, #d4dbd2 45%, #c3c9c0 100%);
+  overflow: hidden;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+body::before {
+  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.55), transparent 50%),
+    radial-gradient(circle at 80% 10%, rgba(255, 255, 255, 0.35), transparent 45%),
+    radial-gradient(circle at 50% 80%, rgba(255, 255, 255, 0.25), transparent 55%);
+  opacity: 0.8;
+}
+
+body::after {
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.15), transparent 60%);
+}
+
+#game-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+#game-root::before {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  border-radius: 28px;
+  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.45), transparent 55%),
+    linear-gradient(140deg, rgba(255, 255, 255, 0.2), transparent 60%);
+  box-shadow: inset 0 0 120px rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+}
+
+#game-canvas {
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(15, 20, 23, 0.25);
+  background: #d8ded4;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  position: relative;
+  z-index: 1;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: 0.95rem;
+  z-index: 2;
+  display: block;
+}
+
+.status-bars {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(15, 20, 23, 0.08);
+  box-shadow: 0 12px 24px rgba(15, 20, 23, 0.12);
+}
+
+.status {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.bar-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+.bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 20, 23, 0.15);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3b8a8f, #2f6f4f);
+  width: 0%;
+  transition: width 120ms ease;
+}
+
+.status[data-bar="health"] .bar-fill {
+  background: linear-gradient(90deg, #d36a5f, #b5483b);
+}
+
+.status[data-bar="hunger"] .bar-fill {
+  background: linear-gradient(90deg, #e7b95b, #d8a243);
+}
+
+.status[data-bar="stamina"] .bar-fill {
+  background: linear-gradient(90deg, #7fb6b9, #3b8a8f);
+}
+
+.build-banner {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 20, 23, 0.12);
+  box-shadow: 0 10px 24px rgba(15, 20, 23, 0.12);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.build-banner.visible {
+  opacity: 1;
+}
+
+.inventory-readout {
+  position: absolute;
+  left: 24px;
+  bottom: 28px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(15, 20, 23, 0.1);
+  box-shadow: 0 8px 18px rgba(15, 20, 23, 0.12);
+  font-size: 0.85rem;
+  color: rgba(15, 20, 23, 0.8);
+}
+
+.hotbar {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  display: grid;
+  grid-auto-flow: column;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(15, 20, 23, 0.1);
+  box-shadow: 0 12px 24px rgba(15, 20, 23, 0.12);
+}
+
+.hotbar-slot {
+  width: 84px;
+  height: 52px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 20, 23, 0.15);
+  background: rgba(255, 255, 255, 0.8);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: rgba(15, 20, 23, 0.7);
+}
+
+.hotbar-slot.active {
+  border-color: rgba(47, 111, 79, 0.6);
+  box-shadow: 0 0 0 2px rgba(47, 111, 79, 0.25) inset;
+  color: var(--ink);
+}
+
+.hotbar-slot.disabled {
+  opacity: 0.5;
+}
+
+.slot-key {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.toast-container {
+  position: absolute;
+  left: 50%;
+  bottom: 120px;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  align-items: center;
+  justify-items: center;
+}
+
+.toast {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(15, 20, 23, 0.1);
+  font-size: 0.8rem;
+  box-shadow: 0 8px 18px rgba(15, 20, 23, 0.12);
+}
+
+.debug-panel {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 20, 23, 0.1);
+  box-shadow: 0 10px 24px rgba(15, 20, 23, 0.12);
+  font-size: 0.75rem;
+  color: rgba(15, 20, 23, 0.75);
+  display: none;
+}
+
+.debug-panel.visible {
+  display: grid;
+  gap: 4px;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(215, 221, 212, 0.6);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+  z-index: 3;
+}
+
+.overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 30px 32px;
+  width: min(460px, 90vw);
+  box-shadow: 0 20px 52px var(--shadow);
+  text-align: left;
+  border: 1px solid var(--panel-border);
+}
+
+.panel h1,
+.panel h2 {
+  margin: 0 0 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.panel p {
+  margin: 0 0 18px;
+  color: var(--ink-muted);
+}
+
+.options {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(15, 20, 23, 0.08);
+}
+
+.options h3 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+}
+
+.options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+
+.controls {
+  display: grid;
+  gap: 8px;
+  font-size: 0.95rem;
+  margin-bottom: 22px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(15, 20, 23, 0.08);
+}
+
+.seed-control {
+  margin-bottom: 18px;
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+}
+
+.seed-control label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.seed-row {
+  display: flex;
+  gap: 10px;
+}
+
+.seed-row input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 20, 23, 0.2);
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.seed-row button {
+  padding: 10px 14px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 8px 18px rgba(47, 111, 79, 0.25);
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(47, 111, 79, 0.3);
+}
+
+.seed {
+  margin-top: 16px;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.craft-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.craft-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 20, 23, 0.12);
+  background: rgba(255, 255, 255, 0.75);
+  font-size: 0.9rem;
+}
+
+.craft-item strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+}
+
+.craft-item .status {
+  margin-top: 6px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.craft-item.disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 720px) {
+  #game-canvas {
+    width: 92vw;
+    height: 70vh;
+  }
+
+  .panel {
+    padding: 24px;
+  }
+
+  .status-bars,
+  .debug-panel {
+    display: none;
+  }
+
+  .hotbar {
+    bottom: 14px;
+  }
+}

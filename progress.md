@@ -427,3 +427,18 @@ Validation:
 - Playwright checks run against local dev server:
   - `output/web-game/state-0-1771159755102.json` confirms `buildSlots: []`.
   - Same state confirms no passive random loot (`meat/cooked/hide` remain `0` during idle inventory check).
+
+Updates (2026-02-15, inventory readability polish pass):
+- Rebuilt the inventory overlay into a focused card layout with a dimmed world backdrop and clearer hierarchy.
+- Enlarged slot geometry / spacing via `src/ui/inventoryLayout.js` and restructured right-side summaries into explicit sections:
+  - Materials
+  - Loot
+  - Equipped
+- Added slot styling improvements (active hotbar highlight, cleaner stack counts).
+- Hid conflicting HUD layers while inventory is open (hotbar strip, readout strip, notifications, chat) to reduce visual noise.
+- Moved interaction hints to a single concise footer line inside the inventory panel.
+
+Test log:
+- `npm run build` passed.
+- Playwright inventory-open scenario rerun.
+- Latest visual check: `output/web-game/shot-0-1771188400540.png`.

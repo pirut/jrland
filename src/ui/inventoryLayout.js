@@ -1,33 +1,50 @@
 export function getInventoryLayout(game) {
-  const slotSize = 32;
-  const gap = 6;
+  const slotSize = 36;
+  const gap = 8;
   const gridCols = 9;
   const gridRows = 3;
   const craftCols = 2;
   const craftRows = 2;
-  const panelPadding = 20;
-  const craftAreaWidth = craftCols * slotSize + (craftCols - 1) * gap + 110;
+  const panelPadding = 22;
+  const craftAreaWidth = craftCols * slotSize + (craftCols - 1) * gap + 118;
+  const statsAreaWidth = 236;
   const storageCols = 4;
   const storageRows = 3;
-  const storageAreaWidth = storageCols * slotSize + (storageCols - 1) * gap + 32;
+  const storageAreaWidth = storageCols * slotSize + (storageCols - 1) * gap + 28;
   const hasStorage = Boolean(game.storage?.isOpen?.());
   const gridWidth = gridCols * slotSize + (gridCols - 1) * gap;
+  const sideAreaWidth = Math.max(craftAreaWidth, statsAreaWidth);
   const panelWidth =
-    panelPadding * 2 + gridWidth + craftAreaWidth + (hasStorage ? storageAreaWidth : 0);
-  const panelHeight = panelPadding * 2 + gridRows * slotSize + (gridRows - 1) * gap + slotSize + gap * 2 + 64;
+    panelPadding * 2 +
+    gridWidth +
+    26 +
+    sideAreaWidth +
+    (hasStorage ? storageAreaWidth + 16 : 0);
+  const footerHeight = 96;
+  const panelHeight =
+    panelPadding * 2 +
+    28 +
+    gridRows * slotSize +
+    (gridRows - 1) * gap +
+    gap * 2 +
+    slotSize +
+    footerHeight;
   const panelX = (game.view.width - panelWidth) / 2;
   const panelY = (game.view.height - panelHeight) / 2;
 
   const gridX = panelX + panelPadding;
-  const gridY = panelY + panelPadding + 20;
+  const gridY = panelY + panelPadding + 28;
   const hotbarY = gridY + gridRows * (slotSize + gap) + gap * 2;
+  const footerY = hotbarY + slotSize + 12;
 
-  const craftX = gridX + gridWidth + 24;
-  const craftY = gridY + 10;
-  const outputX = craftX + craftCols * (slotSize + gap) + 30;
+  const craftX = gridX + gridWidth + 26;
+  const craftY = gridY + 8;
+  const outputX = craftX + craftCols * (slotSize + gap) + 24;
   const outputY = craftY + slotSize + gap;
-  const storageX = craftX + craftAreaWidth + 16;
-  const storageY = craftY;
+  const statsX = craftX;
+  const statsY = craftY + craftRows * (slotSize + gap) + 26;
+  const storageX = craftX + sideAreaWidth + 16;
+  const storageY = gridY + 8;
 
   const slots = [];
   for (let row = 0; row < gridRows; row += 1) {
@@ -89,8 +106,11 @@ export function getInventoryLayout(game) {
     hotbarY,
     craftX,
     craftY,
+    statsX,
+    statsY,
     storageX,
     storageY,
+    footerY,
     hasStorage,
   };
 }

@@ -166,6 +166,7 @@ export class Hotbar {
 
   draw(game) {
     if (!game.ui.showHotbar) return;
+    if (game.ui.inventoryOpen) return;
     const layout = getHotbarLayout(game);
     const { slotSize, totalSlots, startX, startY } = layout;
     this.ctx.save();
@@ -459,6 +460,7 @@ export class InventoryReadout {
 
   draw(game) {
     if (!game.ui.showInventoryReadout) return;
+    if (game.ui.inventoryOpen) return;
     const resources = [
       { id: "wood", label: "Wood" },
       { id: "stone", label: "Stone" },
@@ -527,6 +529,7 @@ export class Notifications {
   }
 
   draw(game) {
+    if (game.ui.inventoryOpen) return;
     if (!game.notifications.items.length) return;
     this.ctx.save();
     this.ctx.font = "12px 'Manrope', sans-serif";
@@ -554,6 +557,7 @@ export class ChatOverlay {
 
   draw(game) {
     if (!game.ui.showChat) return;
+    if (game.ui.inventoryOpen) return;
     const messages = game.chat.messages.slice(-4);
     const baseX = 18;
     const baseY = game.view.height - 140;
@@ -594,59 +598,63 @@ export class InventoryOverlay {
     const panelWidth = layout.panel.w;
     const panelHeight = layout.panel.h;
     this.ctx.save();
-    this.ctx.fillStyle = "rgba(248,248,246,0.9)";
+    this.ctx.fillStyle = "rgba(10, 16, 20, 0.42)";
+    this.ctx.fillRect(0, 0, game.view.width, game.view.height);
+
+    this.ctx.fillStyle = "rgba(245, 248, 244, 0.97)";
     this.ctx.fillRect(x, y, panelWidth, panelHeight);
-    this.ctx.strokeStyle = "rgba(0,0,0,0.15)";
+    this.ctx.strokeStyle = "rgba(34, 48, 40, 0.28)";
+    this.ctx.lineWidth = 2;
     this.ctx.strokeRect(x, y, panelWidth, panelHeight);
-    this.ctx.fillStyle = "rgba(15,20,23,0.8)";
-    this.ctx.font = "14px 'Manrope', sans-serif";
-    this.ctx.fillText("Inventory", x + 16, y + 24);
-    this.ctx.fillText("Crafting", layout.craftX, layout.craftY - 10);
+
+    this.ctx.fillStyle = "rgba(228, 236, 228, 0.92)";
+    this.ctx.fillRect(x + 1, y + 1, panelWidth - 2, 34);
+    this.ctx.fillStyle = "rgba(18, 28, 22, 0.9)";
+    this.ctx.font = "700 18px 'Manrope', sans-serif";
+    this.ctx.fillText("Inventory", x + 16, y + 23);
     this.ctx.font = "12px 'Manrope', sans-serif";
-    this.ctx.fillText("Output", layout.outputSlot.x, layout.outputSlot.y - 6);
+    this.ctx.fillStyle = "rgba(26, 36, 30, 0.7)";
+    this.ctx.fillText("Sort, craft, and manage carried gear", x + 130, y + 22);
+
+    const gridW = 9 * (layout.slotSize + layout.gap) - layout.gap;
+    const gridH = 3 * (layout.slotSize + layout.gap) - layout.gap;
+    this.drawSectionCard(layout.gridX - 12, layout.gridY - 14, gridW + 24, gridH + 28, "Backpack");
+    this.drawSectionCard(layout.gridX - 12, layout.hotbarY - 14, gridW + 24, layout.slotSize + 28, "Hotbar");
+
+    const craftW = 2 * (layout.slotSize + layout.gap) - layout.gap;
+    const craftH = 2 * (layout.slotSize + layout.gap) - layout.gap;
+    this.drawSectionCard(layout.craftX - 10, layout.craftY - 14, craftW + 20, craftH + 28, "Craft Grid");
+    this.drawSectionCard(
+      layout.outputSlot.x - 10,
+      layout.outputSlot.y - 34,
+      layout.outputSlot.w + 20,
+      layout.outputSlot.h + 54,
+      "Output"
+    );
+
     if (layout.hasStorage) {
-      this.ctx.font = "12px 'Manrope', sans-serif";
-      this.ctx.fillText("Storage", layout.storageX, layout.storageY - 10);
+      const storageW = 4 * (layout.slotSize + layout.gap) - layout.gap;
+      const storageH = 3 * (layout.slotSize + layout.gap) - layout.gap;
+      this.drawSectionCard(layout.storageX - 10, layout.storageY - 14, storageW + 20, storageH + 28, "Storage");
     }
 
-    this.ctx.fillStyle = "rgba(0,0,0,0.04)";
-    this.ctx.fillRect(layout.gridX - 8, layout.gridY - 8, 9 * (layout.slotSize + layout.gap) - layout.gap + 16, 3 * (layout.slotSize + layout.gap) - layout.gap + 16);
-    this.ctx.fillRect(layout.gridX - 8, layout.hotbarY - 8, 9 * (layout.slotSize + layout.gap) - layout.gap + 16, layout.slotSize + 16);
-    this.ctx.fillRect(layout.craftX - 8, layout.craftY - 8, 2 * (layout.slotSize + layout.gap) - layout.gap + 16, 2 * (layout.slotSize + layout.gap) - layout.gap + 16);
-    if (layout.hasStorage) {
-      this.ctx.fillRect(layout.storageX - 8, layout.storageY - 8, 4 * (layout.slotSize + layout.gap) - layout.gap + 16, 3 * (layout.slotSize + layout.gap) - layout.gap + 16);
-    }
+    const statsX = layout.statsX - 10;
+    const statsY = layout.statsY - 14;
+    const statsW = layout.hasStorage ? layout.storageX - statsX - 18 : x + panelWidth - statsX - 14;
+    const statsH = y + panelHeight - statsY - 14;
+    this.drawSectionCard(statsX, statsY, statsW, statsH, "At a Glance");
 
+    this.ctx.font = "12px 'Manrope', sans-serif";
     game.inventory.slots.forEach((slot, index) => {
       const rect = layout.slots[index];
       if (!rect) return;
-      this.ctx.fillStyle = "rgba(255,255,255,0.85)";
-      this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-      this.ctx.strokeStyle = "rgba(0,0,0,0.25)";
-      this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-      if (slot.id) {
-        drawItemIcon(this.ctx, slot.id, rect.x + 6, rect.y + 6, 2);
-        if (slot.count > 1) {
-          this.ctx.fillStyle = "rgba(15,20,23,0.75)";
-          this.ctx.fillText(String(slot.count), rect.x + 18, rect.y + 28);
-        }
-      }
+      this.drawSlot(rect, slot, game.ui.activeHotbarIndex === index);
     });
 
     game.craftingGrid.forEach((slot, index) => {
       const rect = layout.craftSlots[index];
       if (!rect) return;
-      this.ctx.fillStyle = "rgba(255,255,255,0.85)";
-      this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-      this.ctx.strokeStyle = "rgba(0,0,0,0.25)";
-      this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-      if (slot.id) {
-        drawItemIcon(this.ctx, slot.id, rect.x + 6, rect.y + 6, 2);
-        if (slot.count > 1) {
-          this.ctx.fillStyle = "rgba(15,20,23,0.75)";
-          this.ctx.fillText(String(slot.count), rect.x + 18, rect.y + 28);
-        }
-      }
+      this.drawSlot(rect, slot, false);
     });
 
     const result = game.inventoryUI.getRecipeResult(
@@ -655,73 +663,27 @@ export class InventoryOverlay {
       game.structureContext
     );
     const output = result?.output ?? null;
-    this.ctx.fillStyle = "rgba(255,255,255,0.85)";
-    this.ctx.fillRect(layout.outputSlot.x, layout.outputSlot.y, layout.outputSlot.w, layout.outputSlot.h);
-    this.ctx.strokeStyle = "rgba(0,0,0,0.25)";
-    this.ctx.strokeRect(layout.outputSlot.x, layout.outputSlot.y, layout.outputSlot.w, layout.outputSlot.h);
+    this.drawSlot(layout.outputSlot, output ? { ...output } : { id: null, count: 0 }, false);
     if (output) {
-      drawItemIcon(this.ctx, output.id, layout.outputSlot.x + 6, layout.outputSlot.y + 6, 2);
-      if (output.count > 1) {
-        this.ctx.fillStyle = "rgba(15,20,23,0.75)";
-        this.ctx.fillText(String(output.count), layout.outputSlot.x + 18, layout.outputSlot.y + 28);
-      }
       if (result?.locked) {
-        this.ctx.fillStyle = "rgba(15,20,23,0.65)";
+        this.ctx.fillStyle = "rgba(28, 38, 32, 0.72)";
         this.ctx.fillRect(layout.outputSlot.x, layout.outputSlot.y, layout.outputSlot.w, layout.outputSlot.h);
-        this.ctx.fillStyle = "rgba(255,255,255,0.9)";
-        this.ctx.font = "10px 'Manrope', sans-serif";
+        this.ctx.fillStyle = "rgba(255,255,255,0.95)";
+        this.ctx.font = "11px 'Manrope', sans-serif";
         const label = result.structureLocked ? "Workbench" : `Lvl ${result.requiredLevel}`;
-        this.ctx.fillText(label, layout.outputSlot.x + 4, layout.outputSlot.y + 20);
+        this.ctx.fillText(label, layout.outputSlot.x + 4, layout.outputSlot.y + 23);
       }
     }
+
+    this.drawInventoryStats(game, layout, statsX, statsY, statsW, statsH);
+
     this.ctx.font = "11px 'Manrope', sans-serif";
-    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
-    const statsX = x + 16;
-    const statsY = y + panelHeight - 66;
-    const statsLine2Y = y + panelHeight - 48;
-    const statsLine3Y = y + panelHeight - 30;
-    const statsLine4Y = y + panelHeight - 14;
-    this.ctx.fillStyle = "rgba(15,20,23,0.8)";
-    this.ctx.fillText("Materials", statsX, statsY);
-    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
-    this.ctx.fillText(`Wood ${game.inventory.getCount("wood")}`, statsX + 78, statsY);
-    this.ctx.fillText(`Stone ${game.inventory.getCount("stone")}`, statsX + 152, statsY);
-    this.ctx.fillText(`Planks ${game.inventory.getCount("planks")}`, statsX + 228, statsY);
-    this.ctx.fillText(`Berries ${game.inventory.getCount("berry")}`, statsX + 318, statsY);
-    this.ctx.fillStyle = "rgba(15,20,23,0.8)";
-    this.ctx.fillText("Loot", statsX, statsLine2Y);
-    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
-    this.ctx.fillText(`Meat ${game.inventory.getCount("meat")}`, statsX + 78, statsLine2Y);
-    this.ctx.fillText(`Cooked ${game.inventory.getCount("cooked_meat")}`, statsX + 152, statsLine2Y);
-    this.ctx.fillText(`Hide ${game.inventory.getCount("hide")}`, statsX + 248, statsLine2Y);
-    const axeLabel =
-      game.gear.axe === "reinforced_axe"
-        ? "Reinforced Axe"
-        : game.gear.axe === "stone_axe"
-          ? "Stone Axe"
-          : "None";
-    const pickLabel =
-      game.gear.pick === "reinforced_pick"
-        ? "Reinforced Pick"
-        : game.gear.pick === "stone_pick"
-          ? "Stone Pick"
-          : "None";
-    const weaponLabel =
-      game.gear.weapon === "reinforced_spear"
-        ? "Reinforced Spear"
-        : game.gear.weapon === "stone_spear"
-          ? "Stone Spear"
-          : "None";
-    const armorLabel = game.gear.armor === "hide_armor" ? "Hide Armor" : "None";
-    this.ctx.fillStyle = "rgba(15,20,23,0.8)";
-    this.ctx.fillText("Crafted", statsX, statsLine3Y);
-    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
-    this.ctx.fillText(`Axe ${axeLabel}`, statsX + 78, statsLine3Y);
-    this.ctx.fillText(`Pick ${pickLabel}`, statsX + 200, statsLine3Y);
-    this.ctx.fillText(`Weapon ${weaponLabel}`, statsX + 322, statsLine3Y);
-    this.ctx.fillText(`Armor ${armorLabel}`, statsX + 492, statsLine3Y);
-    this.ctx.fillText(`Carry ${game.inventory.count()}/${game.inventory.capacity()}`, statsX, statsLine4Y);
-    this.ctx.fillText(`Backpack ${game.gear.backpack ? "Yes" : "No"}`, statsX + 140, statsLine4Y);
+    this.ctx.fillStyle = "rgba(18, 32, 24, 0.72)";
+    this.ctx.fillText(
+      "Shift+Click transfer · Right-click split · Shift+Click output craft-all",
+      layout.gridX - 4,
+      y + panelHeight - 18
+    );
 
     if (layout.hasStorage) {
       const storage = game.storage.getActiveContainer();
@@ -729,17 +691,7 @@ export class InventoryOverlay {
         storage.slots.forEach((slot, index) => {
           const rect = layout.storageSlots[index];
           if (!rect) return;
-          this.ctx.fillStyle = "rgba(255,255,255,0.85)";
-          this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-          this.ctx.strokeStyle = "rgba(0,0,0,0.25)";
-          this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-          if (slot.id) {
-            drawItemIcon(this.ctx, slot.id, rect.x + 6, rect.y + 6, 2);
-            if (slot.count > 1) {
-              this.ctx.fillStyle = "rgba(15,20,23,0.75)";
-              this.ctx.fillText(String(slot.count), rect.x + 18, rect.y + 28);
-            }
-          }
+          this.drawSlot(rect, slot, false);
         });
       }
     }
@@ -754,15 +706,105 @@ export class InventoryOverlay {
     if (game.ui.cursorItem) {
       drawItemIcon(this.ctx, game.ui.cursorItem.id, game.ui.mouseX - 8, game.ui.mouseY - 8, 2);
       if (game.ui.cursorItem.count > 1) {
-        this.ctx.fillStyle = "rgba(15,20,23,0.75)";
-        this.ctx.fillText(String(game.ui.cursorItem.count), game.ui.mouseX + 4, game.ui.mouseY + 12);
+        this.ctx.fillStyle = "rgba(15,20,23,0.85)";
+        this.ctx.font = "12px 'Manrope', sans-serif";
+        this.ctx.fillText(String(game.ui.cursorItem.count), game.ui.mouseX + 4, game.ui.mouseY + 14);
       }
     }
-
-    this.ctx.fillStyle = "rgba(15,20,23,0.45)";
-    this.ctx.font = "10px 'Manrope', sans-serif";
-    this.ctx.fillText("Shift + Right Click: Split · Shift + Click: Transfer · Shift + Click Output: Craft All", x + 16, y + panelHeight - 6);
     this.ctx.restore();
+  }
+
+  drawSectionCard(x, y, w, h, label) {
+    this.ctx.fillStyle = "rgba(233, 238, 232, 0.85)";
+    this.ctx.fillRect(x, y, w, h);
+    this.ctx.strokeStyle = "rgba(46, 62, 52, 0.24)";
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(x, y, w, h);
+    this.ctx.fillStyle = "rgba(26, 38, 30, 0.8)";
+    this.ctx.font = "600 12px 'Manrope', sans-serif";
+    this.ctx.fillText(label, x + 8, y + 14);
+  }
+
+  drawSlot(rect, slot, active = false) {
+    this.ctx.fillStyle = active ? "rgba(230, 245, 234, 0.95)" : "rgba(255, 255, 255, 0.9)";
+    this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    this.ctx.strokeStyle = active ? "rgba(48, 112, 72, 0.75)" : "rgba(0, 0, 0, 0.24)";
+    this.ctx.lineWidth = active ? 2 : 1;
+    this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+    if (!slot?.id) return;
+    drawItemIcon(this.ctx, slot.id, rect.x + 8, rect.y + 8, 2);
+    if (slot.count > 1) {
+      this.ctx.fillStyle = "rgba(18, 28, 22, 0.8)";
+      this.ctx.font = "700 12px 'Manrope', sans-serif";
+      this.ctx.fillText(String(slot.count), rect.x + rect.w - 14, rect.y + rect.h - 8);
+    }
+  }
+
+  drawInventoryStats(game, layout, x, y, w) {
+    const pad = 10;
+    const chipGap = 6;
+    const chipH = 20;
+    const textColor = "rgba(24, 36, 28, 0.78)";
+    const chip2W = Math.floor((w - pad * 2 - chipGap) / 2);
+    const chip3W = Math.floor((w - pad * 2 - chipGap * 2) / 3);
+    const drawChip = (chipX, chipY, chipW, id, label) => {
+      this.ctx.fillStyle = "rgba(255,255,255,0.9)";
+      this.ctx.fillRect(chipX, chipY, chipW, chipH);
+      this.ctx.strokeStyle = "rgba(34, 52, 42, 0.18)";
+      this.ctx.strokeRect(chipX, chipY, chipW, chipH);
+      drawItemIcon(this.ctx, id, chipX + 5, chipY + 4, 2);
+      this.ctx.fillStyle = textColor;
+      this.ctx.font = "11px 'Manrope', sans-serif";
+      this.ctx.fillText(label, chipX + 24, chipY + 13);
+      this.ctx.font = "700 11px 'Manrope', sans-serif";
+      this.ctx.fillText(String(game.inventory.getCount(id)), chipX + chipW - 14, chipY + 13);
+    };
+
+    this.ctx.fillStyle = "rgba(18, 32, 24, 0.9)";
+    this.ctx.font = "700 12px 'Manrope', sans-serif";
+    this.ctx.fillText("Materials", x + pad, y + 24);
+    drawChip(x + pad, y + 30, chip2W, "wood", "Wood");
+    drawChip(x + pad + chip2W + chipGap, y + 30, chip2W, "stone", "Stone");
+    drawChip(x + pad, y + 30 + chipH + 6, chip2W, "planks", "Planks");
+    drawChip(x + pad + chip2W + chipGap, y + 30 + chipH + 6, chip2W, "berry", "Berries");
+
+    this.ctx.fillStyle = "rgba(18, 32, 24, 0.9)";
+    this.ctx.font = "700 12px 'Manrope', sans-serif";
+    this.ctx.fillText("Loot", x + pad, y + 92);
+    drawChip(x + pad, y + 98, chip3W, "meat", "Meat");
+    drawChip(x + pad + chip3W + chipGap, y + 98, chip3W, "cooked_meat", "Cooked");
+    drawChip(x + pad + (chip3W + chipGap) * 2, y + 98, chip3W, "hide", "Hide");
+
+    const shortGearLabel = (value) => {
+      if (value === "reinforced_axe") return "R Axe";
+      if (value === "stone_axe") return "S Axe";
+      if (value === "reinforced_pick") return "R Pick";
+      if (value === "stone_pick") return "S Pick";
+      if (value === "reinforced_spear") return "R Spear";
+      if (value === "stone_spear") return "S Spear";
+      if (value === "hide_armor") return "Hide Armor";
+      return "None";
+    };
+    this.ctx.fillStyle = "rgba(18, 32, 24, 0.9)";
+    this.ctx.font = "700 12px 'Manrope', sans-serif";
+    this.ctx.fillText("Equipped", x + pad, y + 132);
+    const gearRows = [
+      [`Axe ${shortGearLabel(game.gear.axe)}`, `Pick ${shortGearLabel(game.gear.pick)}`],
+      [`Weapon ${shortGearLabel(game.gear.weapon)}`, `Armor ${shortGearLabel(game.gear.armor)}`],
+    ];
+    this.ctx.fillStyle = "rgba(24, 36, 28, 0.74)";
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    gearRows.forEach((row, rowIndex) => {
+      this.ctx.fillText(row[0], x + pad, y + 148 + rowIndex * 14);
+      this.ctx.fillText(row[1], x + pad + 112, y + 148 + rowIndex * 14);
+    });
+    this.ctx.fillText(
+      `Carry ${game.inventory.count()}/${game.inventory.capacity()} · Backpack ${
+        game.gear.backpack ? "Yes" : "No"
+      }`,
+      x + pad,
+      y + 178
+    );
   }
 
   getHoverSlot(game, layout, output) {

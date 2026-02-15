@@ -1,3 +1,5 @@
+import { BUILDINGS } from "../config.js";
+
 export class Inventory {
   constructor() {
     this.reset();
@@ -22,6 +24,7 @@ export class Inventory {
   }
 
   canAdd(id, amount, maxStack = 32) {
+    if (BUILDINGS[id]) return false;
     if (this.count() + amount > this.capacity()) return false;
     let remaining = amount;
     for (const slot of this.slots) {
@@ -41,6 +44,7 @@ export class Inventory {
   }
 
   addItem(id, amount, maxStack = 32) {
+    if (BUILDINGS[id]) return false;
     let remaining = amount;
     for (const slot of this.slots) {
       if (slot.id === id && slot.count < maxStack) {

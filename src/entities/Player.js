@@ -17,6 +17,7 @@ export class Player {
   reset(spawn) {
     this.x = spawn.x;
     this.y = spawn.y;
+    this.level = 0;
     this.vx = 0;
     this.vy = 0;
     this.facingX = 0;

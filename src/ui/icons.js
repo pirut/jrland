@@ -219,6 +219,16 @@ export const ICONS = {
     "........",
     "........",
   ],
+  wood_floor: [
+    "bbbbbbbb",
+    "b......b",
+    "b.bbbb.b",
+    "b.bbbb.b",
+    "b.bbbb.b",
+    "b......b",
+    "........",
+    "........",
+  ],
   planks: [
     "........",
     ".bbbbbb.",
@@ -308,6 +318,9 @@ export const ICON_PALETTES = {
   },
   storage_crate: {
     b: "#8a6a4b",
+  },
+  wood_floor: {
+    b: "#9f7752",
   },
   hide_armor: {
     b: "#b08a62",

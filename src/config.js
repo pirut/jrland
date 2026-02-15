@@ -26,6 +26,8 @@ export const BUILDINGS = {
     canopy: false,
     category: "utility",
     solid: false,
+    maxLevel: 0,
+    supportsUpper: false,
   },
   shelter: {
     cost: { wood: 6, stone: 2 },
@@ -59,6 +61,7 @@ export const BUILDINGS = {
     canopy: false,
     category: "utility",
     solid: false,
+    supportsUpper: false,
   },
   hut: {
     cost: { planks: 6, stone: 4, hide: 2 },
@@ -79,6 +82,19 @@ export const BUILDINGS = {
     unlockLevel: 2,
     canopy: false,
     category: "utility",
+    solid: false,
+    maxLevel: 0,
+    supportsUpper: false,
+  },
+  wood_floor: {
+    cost: { planks: 2 },
+    footprint: { w: 1, h: 1 },
+    baseSize: { w: 0.95, h: 0.18 },
+    footprintRadius: 0,
+    spacing: 0,
+    unlockLevel: 1,
+    canopy: false,
+    category: "housing",
     solid: false,
   },
   wood_wall: {
@@ -130,6 +146,7 @@ export const ITEMS = {
   wood_wall: { name: "Wood Wall", maxStack: 20 },
   wood_gate: { name: "Wood Gate", maxStack: 12 },
   storage_crate: { name: "Storage Crate", maxStack: 6 },
+  wood_floor: { name: "Wood Floor", maxStack: 24 },
 };
 
 export const CRAFTING_RECIPES = [

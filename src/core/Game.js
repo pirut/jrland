@@ -35,6 +35,7 @@ export class Game {
     this.inputSampleInterval = 1 / 20;
     this.view = { width: 0, height: 0 };
     this.camera = { x: 0, y: 0 };
+    this.playerLevel = 0;
     this.world = new World(seed);
     this.player = new Player();
     this.inventory = new Inventory();
@@ -70,6 +71,8 @@ export class Game {
       nearWorkbench: false,
       nearStorage: false,
       underCanopy: false,
+      nearUpperFloor: false,
+      underUpperFloor: false,
       stormDrain: 1,
       storageBonus: 0,
     };
@@ -77,8 +80,7 @@ export class Game {
     this.timeOfDay = 0.25;
     this.externalTime = false;
     this.isNight = this.isNightTime();
-    this.isNight = false;
-    this.debug = { enabled: true };
+    this.debug = { enabled: false };
     this.lastUpdate = performance.now();
     this.overlays = overlays;
     this.resetWorld(seed);
@@ -117,6 +119,10 @@ export class Game {
       "r",
       "b",
       "q",
+      "z",
+      "x",
+      "pageup",
+      "pagedown",
       "1",
       "2",
       "3",
@@ -148,6 +154,7 @@ export class Game {
         active: this.build.active,
         selected: this.build.selected,
         rotation: this.build.rotation ?? 0,
+        level: this.build.level ?? 0,
       },
       mode: this.mode,
       inventoryOpen: this.ui.inventoryOpen,
@@ -194,6 +201,7 @@ export class Game {
     this.ui.activeHotbarIndex = 0;
     this.craftingGrid = Array.from({ length: 4 }, () => ({ id: null, count: 0 }));
     this.seedStarterItems();
+    this.stripBuildItemsFromInventory();
     this.applyProgression();
     this.interaction = { target: null, inRange: false, dist: null };
     this.structureContext = {
@@ -202,38 +210,31 @@ export class Game {
       nearWorkbench: false,
       nearStorage: false,
       underCanopy: false,
+      nearUpperFloor: false,
+      underUpperFloor: false,
       stormDrain: 1,
       storageBonus: 0,
     };
     const spawn = this.world.findSpawn();
     this.player.reset(spawn);
+    this.playerLevel = this.player.level ?? 0;
     this.camera.x = spawn.x;
     this.camera.y = spawn.y;
   }
 
-  seedStarterItems() {
-    this.inventory.slots[0] = { id: "campfire", count: 1 };
-  }
-
-  hasItem(id) {
-    return this.inventory.slots.some((slot) => slot.id === id);
-  }
-
-  grantBlueprint(id) {
-    if (this.hasItem(id)) return;
-    const slot = this.inventory.slots.find((entry) => !entry.id);
-    if (slot) {
-      slot.id = id;
-      slot.count = 1;
-    }
-  }
-
-  ensureBlueprints() {
-    Object.entries(BUILDINGS).forEach(([id]) => {
-      if (this.isBuildUnlocked(id)) {
-        this.grantBlueprint(id);
-      }
+  stripBuildItemsFromInventory() {
+    this.inventory.slots.forEach((slot) => {
+      if (!slot?.id) return;
+      if (!BUILDINGS[slot.id]) return;
+      slot.id = null;
+      slot.count = 0;
     });
+  }
+
+  seedStarterItems() {
+    this.inventory.slots[0] = { id: "wood", count: 6 };
+    this.inventory.slots[1] = { id: "stone", count: 4 };
+    this.inventory.slots[2] = { id: "berry", count: 2 };
   }
 
   isBuildUnlocked(id) {
@@ -247,7 +248,6 @@ export class Game {
     if (this.player?.applyProgression) {
       this.player.applyProgression(this.progression.level);
     }
-    this.ensureBlueprints();
   }
 
   updateCapacityBonus() {
@@ -414,6 +414,9 @@ export class Game {
     this.mode = "playing";
     this.toggleOverlay("menu", false);
     this.toggleOverlay("pause", false);
+    this.notifications.push("WASD to move, hold right click to path");
+    this.notifications.push("Left click to interact or attack");
+    this.notifications.push("Build mode: B, floor level: Z/X");
     this.emitAction("start_game", { seed: this.seed });
   }
 
@@ -446,7 +449,12 @@ export class Game {
       this.interaction.kind = "resource";
       return;
     }
-    const structure = this.world.findNearestStructure(this.player.x, this.player.y, 1.6);
+    const structure = this.world.findNearestStructure(
+      this.player.x,
+      this.player.y,
+      1.6,
+      this.playerLevel
+    );
     if (structure) {
       this.interaction.target = structure.structure;
       this.interaction.inRange = true;
@@ -473,13 +481,37 @@ export class Game {
     let nearWorkbench = false;
     let nearStorage = 0;
     let underCanopy = false;
+    let nearUpperFloor = false;
+    let underUpperFloor = false;
     structures.forEach((structure) => {
+      const level = structure.level ?? 0;
+      const minX = structure.originX ?? structure.x - 0.5;
+      const minY = structure.originY ?? structure.y - 0.5;
+      const w = structure.w ?? 1;
+      const h = structure.h ?? 1;
       const dist = Math.hypot(structure.x - this.player.x, structure.y - this.player.y);
-      if (structure.type === "campfire" && dist < 1.6) nearCampfire = true;
-      if (structure.type === "shelter" && dist < 1.9) nearShelter = true;
-      if (structure.type === "lean_to" && dist < 1.8) nearShelter = true;
-      if (structure.type === "workbench" && dist < 1.6) nearWorkbench = true;
-      if (structure.type === "storage_crate" && dist < 1.7) nearStorage += 1;
+      if (level === this.playerLevel) {
+        if (structure.type === "campfire" && dist < 1.6) nearCampfire = true;
+        if (structure.type === "shelter" && dist < 1.9) nearShelter = true;
+        if (structure.type === "lean_to" && dist < 1.8) nearShelter = true;
+        if (structure.type === "workbench" && dist < 1.6) nearWorkbench = true;
+        if (structure.type === "storage_crate" && dist < 1.7) nearStorage += 1;
+      }
+      if (level > this.playerLevel) {
+        const expand = 1.6;
+        const withinExpanded =
+          this.player.x >= minX - expand &&
+          this.player.x <= minX + w + expand &&
+          this.player.y >= minY - expand &&
+          this.player.y <= minY + h + expand;
+        const withinExact =
+          this.player.x >= minX &&
+          this.player.x <= minX + w &&
+          this.player.y >= minY &&
+          this.player.y <= minY + h;
+        if (withinExpanded) nearUpperFloor = true;
+        if (withinExact) underUpperFloor = true;
+      }
       const def = BUILDINGS[structure.type];
       if (def?.canopy || def?.roof) {
         const roof = def?.roof ?? { w: structure.w ?? 1, h: structure.h ?? 1, offsetY: 0 };
@@ -497,7 +529,9 @@ export class Game {
     this.structureContext.nearShelter = nearShelter;
     this.structureContext.nearWorkbench = nearWorkbench;
     this.structureContext.nearStorage = nearStorage > 0;
-    this.structureContext.underCanopy = underCanopy;
+    this.structureContext.nearUpperFloor = nearUpperFloor;
+    this.structureContext.underUpperFloor = underUpperFloor;
+    this.structureContext.underCanopy = underCanopy || underUpperFloor;
     this.structureContext.stormDrain = this.weather.type === "storm" ? 1.35 : 1;
     this.structureContext.storageBonus = Math.min(18, nearStorage * 6);
     this.updateCapacityBonus();
@@ -568,7 +602,7 @@ export class Game {
   }
 
   attemptInteract() {
-    const found = this.world.findNearestStructure(this.player.x, this.player.y, 1.6);
+    const found = this.world.findNearestStructure(this.player.x, this.player.y, 1.6, this.playerLevel);
     if (!found) return false;
     const { structure } = found;
     if (structure.type === "campfire") {
@@ -672,7 +706,8 @@ export class Game {
       preview.originY,
       preview.w,
       preview.h,
-      preview.rotation ?? 0
+      preview.rotation ?? 0,
+      preview.level ?? 0
     );
     this.notifications.push(`Built ${this.build.selected}`);
     this.awardXp(PROGRESSION.xp.build);
@@ -686,6 +721,7 @@ export class Game {
       w: preview.w,
       h: preview.h,
       rotation: preview.rotation ?? 0,
+      level: preview.level ?? 0,
     });
   }
 
@@ -736,8 +772,17 @@ export class Game {
     if (this.input.wasPressed("r")) this.useActiveItem();
     this.input.clearPressed();
     const smooth = 1 - Math.pow(0.001, dt * 4.5);
-    this.camera.x = lerp(this.camera.x, this.player.x, smooth);
-    this.camera.y = lerp(this.camera.y, this.player.y, smooth);
+    const pointerLookEnabled = this.ui.pointerInCanvas && !this.build.active;
+    const pointerLookX = pointerLookEnabled
+      ? clamp(((this.ui.mouseX / Math.max(1, this.view.width)) - 0.5) * 2.8, -1.4, 1.4)
+      : 0;
+    const pointerLookY = pointerLookEnabled
+      ? clamp(((this.ui.mouseY / Math.max(1, this.view.height)) - 0.5) * 2.2, -1.1, 1.1)
+      : 0;
+    const targetCameraX = this.player.x + pointerLookX;
+    const targetCameraY = this.player.y + pointerLookY;
+    this.camera.x = lerp(this.camera.x, targetCameraX, smooth);
+    this.camera.y = lerp(this.camera.y, targetCameraY, smooth);
     const scale = Math.min(this.view.width / 960, this.view.height / 540);
     const tileSize = CONFIG.baseTileSize * clamp(scale, 0.8, 1.2);
     const bounds = this.renderer.getViewBounds(this, tileSize);
@@ -914,6 +959,7 @@ export class Game {
         w: structure.w ?? 1,
         h: structure.h ?? 1,
         rotation: structure.rotation ?? 0,
+        level: structure.level ?? 0,
         open: Boolean(structure.open),
       })),
       interaction: this.interaction.target
@@ -944,6 +990,7 @@ export class Game {
       build: {
         active: this.build.active,
         selected: this.build.selected,
+        level: this.build.level ?? 0,
         preview: this.build.preview
           ? {
               x: Number(this.build.preview.x.toFixed(2)),
@@ -953,6 +1000,7 @@ export class Game {
               w: this.build.preview.w,
               h: this.build.preview.h,
               rotation: this.build.preview.rotation ?? 0,
+              level: this.build.preview.level ?? 0,
               valid: this.build.preview.valid,
               reason: this.build.preview.reason,
             }

@@ -7,9 +7,9 @@ export class UIState {
     this.showBuildBanner = true;
     this.showBuildCatalog = true;
     this.showChat = true;
-    this.showDebug = true;
+    this.showDebug = false;
     this.showProgress = true;
-    this.showNetStatus = true;
+    this.showNetStatus = false;
     this.inventoryOpen = false;
     this.activeHotbarIndex = 0;
     this.cursorItem = null;

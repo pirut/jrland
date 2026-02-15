@@ -216,8 +216,9 @@ export class BuildBanner {
     const preview = game.build.preview;
     const reason = preview && !preview.valid && preview.reason ? ` — ${preview.reason}` : "";
     const sizeText = blueprint.footprint ? `${blueprint.footprint.w}x${blueprint.footprint.h}` : "1x1";
+    const floorText = `Floor ${game.build.level + 1}`;
     const rotationText = game.build.rotation ? ` rot ${game.build.rotation * 90}°` : "";
-    const text = `Build: ${game.build.selected} ${sizeText}${rotationText} (${costText})${reason}`;
+    const text = `Build: ${game.build.selected} ${sizeText} · ${floorText}${rotationText} (${costText})${reason}`;
     this.ctx.save();
     this.ctx.font = "12px 'Manrope', sans-serif";
     const width = this.ctx.measureText(text).width + 20;
@@ -283,6 +284,7 @@ export class BuildPlanner {
       .join(" · ");
     const sizeText = blueprint.footprint ? `${blueprint.footprint.w}x${blueprint.footprint.h}` : "1x1";
     const levelText = blueprint.unlockLevel ? `Lvl ${blueprint.unlockLevel}` : "Lvl 1";
+    const floorText = `Floor ${game.build.level + 1}`;
     this.ctx.save();
     this.ctx.fillStyle = "rgba(255,255,255,0.78)";
     this.ctx.fillRect(x, y, panelWidth, panelHeight);
@@ -294,11 +296,11 @@ export class BuildPlanner {
     this.ctx.fillText(`Selected: ${game.build.selected}`, x + 44, y + 20);
     this.ctx.font = "11px 'Manrope', sans-serif";
     this.ctx.fillStyle = "rgba(15,20,23,0.65)";
-    this.ctx.fillText(`${sizeText} · ${levelText}`, x + 44, y + 36);
+    this.ctx.fillText(`${sizeText} · ${levelText} · ${floorText}`, x + 44, y + 36);
     this.ctx.fillText(costText, x + 12, y + 58);
     this.ctx.fillStyle = "rgba(15,20,23,0.5)";
-    this.ctx.fillText("Left click: place", x + 12, y + 78);
-    this.ctx.fillText("Right click: cancel", x + 120, y + 78);
+    this.ctx.fillText("LMB place · RMB move", x + 12, y + 78);
+    this.ctx.fillText("Z/X or Alt+Wheel: floor", x + 114, y + 78);
     this.ctx.restore();
   }
 }
@@ -355,7 +357,7 @@ export class BuildCatalog {
       buildIndex += 1;
       return line;
     });
-    const header = "Build Catalog (click to select, Q rotate)";
+    const header = "Build Catalog (click select, Q rotate, Z/X floor)";
     const width =
       Math.max(
         this.ctx.measureText(header).width,
@@ -675,16 +677,23 @@ export class InventoryOverlay {
     this.ctx.font = "11px 'Manrope', sans-serif";
     this.ctx.fillStyle = "rgba(15,20,23,0.65)";
     const statsX = x + 16;
-    const statsY = y + panelHeight - 62;
-    const statsLine2Y = y + panelHeight - 44;
-    const statsLine3Y = y + panelHeight - 26;
-    this.ctx.fillText(`Wood: ${game.inventory.getCount("wood")}`, statsX, statsY);
-    this.ctx.fillText(`Stone: ${game.inventory.getCount("stone")}`, statsX + 120, statsY);
-    this.ctx.fillText(`Berries: ${game.inventory.getCount("berry")}`, statsX + 240, statsY);
-    this.ctx.fillText(`Planks: ${game.inventory.getCount("planks")}`, statsX + 360, statsY);
-    this.ctx.fillText(`Meat: ${game.inventory.getCount("meat")}`, statsX, statsLine2Y);
-    this.ctx.fillText(`Hide: ${game.inventory.getCount("hide")}`, statsX + 120, statsLine2Y);
-    this.ctx.fillText(`Cooked: ${game.inventory.getCount("cooked_meat")}`, statsX + 240, statsLine2Y);
+    const statsY = y + panelHeight - 66;
+    const statsLine2Y = y + panelHeight - 48;
+    const statsLine3Y = y + panelHeight - 30;
+    const statsLine4Y = y + panelHeight - 14;
+    this.ctx.fillStyle = "rgba(15,20,23,0.8)";
+    this.ctx.fillText("Materials", statsX, statsY);
+    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
+    this.ctx.fillText(`Wood ${game.inventory.getCount("wood")}`, statsX + 78, statsY);
+    this.ctx.fillText(`Stone ${game.inventory.getCount("stone")}`, statsX + 152, statsY);
+    this.ctx.fillText(`Planks ${game.inventory.getCount("planks")}`, statsX + 228, statsY);
+    this.ctx.fillText(`Berries ${game.inventory.getCount("berry")}`, statsX + 318, statsY);
+    this.ctx.fillStyle = "rgba(15,20,23,0.8)";
+    this.ctx.fillText("Loot", statsX, statsLine2Y);
+    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
+    this.ctx.fillText(`Meat ${game.inventory.getCount("meat")}`, statsX + 78, statsLine2Y);
+    this.ctx.fillText(`Cooked ${game.inventory.getCount("cooked_meat")}`, statsX + 152, statsLine2Y);
+    this.ctx.fillText(`Hide ${game.inventory.getCount("hide")}`, statsX + 248, statsLine2Y);
     const axeLabel =
       game.gear.axe === "reinforced_axe"
         ? "Reinforced Axe"
@@ -704,10 +713,15 @@ export class InventoryOverlay {
           ? "Stone Spear"
           : "None";
     const armorLabel = game.gear.armor === "hide_armor" ? "Hide Armor" : "None";
-    this.ctx.fillText(`Axe: ${axeLabel}`, statsX, statsLine3Y);
-    this.ctx.fillText(`Pick: ${pickLabel}`, statsX + 160, statsLine3Y);
-    this.ctx.fillText(`Weapon: ${weaponLabel}`, statsX + 320, statsLine3Y);
-    this.ctx.fillText(`Armor: ${armorLabel}`, statsX + 520, statsLine3Y);
+    this.ctx.fillStyle = "rgba(15,20,23,0.8)";
+    this.ctx.fillText("Crafted", statsX, statsLine3Y);
+    this.ctx.fillStyle = "rgba(15,20,23,0.65)";
+    this.ctx.fillText(`Axe ${axeLabel}`, statsX + 78, statsLine3Y);
+    this.ctx.fillText(`Pick ${pickLabel}`, statsX + 200, statsLine3Y);
+    this.ctx.fillText(`Weapon ${weaponLabel}`, statsX + 322, statsLine3Y);
+    this.ctx.fillText(`Armor ${armorLabel}`, statsX + 492, statsLine3Y);
+    this.ctx.fillText(`Carry ${game.inventory.count()}/${game.inventory.capacity()}`, statsX, statsLine4Y);
+    this.ctx.fillText(`Backpack ${game.gear.backpack ? "Yes" : "No"}`, statsX + 140, statsLine4Y);
 
     if (layout.hasStorage) {
       const storage = game.storage.getActiveContainer();

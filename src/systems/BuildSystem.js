@@ -3,6 +3,8 @@ export class BuildSystem {
     this.active = false;
     this.selected = "campfire";
     this.rotation = 0;
+    this.level = 0;
+    this.maxLevel = 3;
     this.preview = null;
   }
 
@@ -10,11 +12,24 @@ export class BuildSystem {
     this.active = false;
     this.selected = "campfire";
     this.rotation = 0;
+    this.level = 0;
     this.preview = null;
   }
 
   rotate() {
     this.rotation = (this.rotation + 1) % 4;
+  }
+
+  setLevel(level) {
+    this.level = Math.max(0, Math.min(this.maxLevel, level));
+  }
+
+  raiseLevel() {
+    this.setLevel(this.level + 1);
+  }
+
+  lowerLevel() {
+    this.setLevel(this.level - 1);
   }
 
   updatePreview(player, world, blueprint, unlocked, requiredLevel, pointer) {
@@ -47,16 +62,36 @@ export class BuildSystem {
     const centerY = originY + footprintH / 2;
     let valid = true;
     let reason = "";
+    const minLevel = blueprint.minLevel ?? 0;
+    const maxLevel = blueprint.maxLevel ?? this.maxLevel;
+    if (this.level < minLevel || this.level > maxLevel) {
+      this.preview = {
+        x: centerX,
+        y: centerY,
+        originX,
+        originY,
+        w: footprintW,
+        h: footprintH,
+        valid: false,
+        reason:
+          minLevel === maxLevel
+            ? `Only buildable on floor ${minLevel + 1}`
+            : `Floor ${this.level + 1} not allowed`,
+        level: this.level,
+      };
+      return;
+    }
     if (!unlocked) {
       this.preview = {
         x: centerX,
         y: centerY,
         originX,
         originY,
-        w: footprint.w,
-        h: footprint.h,
+        w: footprintW,
+        h: footprintH,
         valid: false,
         reason: `Requires level ${requiredLevel}`,
+        level: this.level,
       };
       return;
     }
@@ -73,12 +108,22 @@ export class BuildSystem {
         }
       }
     }
-    if (valid && world.hasStructureOverlap(originX, originY, footprintW, footprintH)) {
+    if (valid && world.hasStructureOverlap(originX, originY, footprintW, footprintH, this.level)) {
       valid = false;
       reason = "Space occupied";
     }
+    const requiresSupport = blueprint.requiresSupport ?? false;
+    if (
+      valid &&
+      requiresSupport &&
+      this.level > 0 &&
+      !world.hasSupportBelow(originX, originY, footprintW, footprintH, this.level)
+    ) {
+      valid = false;
+      reason = "Needs support below";
+    }
     const spacing = blueprint.spacing ?? blueprint.footprintRadius ?? 0.7;
-    if (valid && spacing > 0 && world.isStructureNearRadius(centerX, centerY, spacing)) {
+    if (valid && spacing > 0 && world.isStructureNearRadius(centerX, centerY, spacing, this.level)) {
       valid = false;
       reason = "Too close to another structure";
     }
@@ -92,6 +137,7 @@ export class BuildSystem {
       valid,
       reason,
       rotation: this.rotation,
+      level: this.level,
     };
   }
 }

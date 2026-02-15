@@ -60,6 +60,9 @@ export class CreatureSystem {
     this.ensureCreaturesInView(game, bounds);
     const creatureList = Array.from(this.creatures.values());
     creatureList.forEach((creature) => {
+      if (creature.lastDamagedByPlayer > 0) {
+        creature.lastDamagedByPlayer = Math.max(0, creature.lastDamagedByPlayer - dt);
+      }
       const result = creature.update(
         dt,
         game.player,
@@ -145,6 +148,7 @@ export class CreatureSystem {
     if (dot < -0.15) return false;
     const damage = weapon === "reinforced_spear" ? 20 : weapon === "stone_spear" ? 14 : 8;
     chosen.takeDamage(damage);
+    chosen.lastDamagedByPlayer = 6;
     game.notifications.push("Hit!");
     return true;
   }
@@ -169,6 +173,10 @@ export class CreatureSystem {
     });
     if (creature.spawnChunk) {
       creature.spawnChunk.removedCreatures.add(creature.id);
+    }
+    const defeatedByPlayer = (creature.lastDamagedByPlayer ?? 0) > 0;
+    if (!defeatedByPlayer) {
+      return;
     }
     game.awardXp(PROGRESSION.xp.combat);
     game.notifications.push(`${creature.type} defeated`);

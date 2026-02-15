@@ -222,7 +222,7 @@ export class World {
     return this.structures.get(key);
   }
 
-  addStructure(type, originX, originY, w = 1, h = 1, rotation = 0) {
+  addStructure(type, originX, originY, w = 1, h = 1, rotation = 0, level = 0) {
     const size = this.chunkSize;
     const cx = Math.floor(originX / size);
     const cy = Math.floor(originY / size);
@@ -240,6 +240,7 @@ export class World {
       w,
       h,
       rotation,
+      level: Math.max(0, Math.floor(level) || 0),
       open: def?.toggleable ? false : undefined,
     });
   }
@@ -393,21 +394,23 @@ export class World {
     return structures.some((structure) => Math.hypot(structure.x - x, structure.y - y) < radius);
   }
 
-  isStructureNearRadius(x, y, radius) {
+  isStructureNearRadius(x, y, radius, level = null) {
     const structures = this.getStructuresInView(x - radius, y - radius, x + radius, y + radius);
     return structures.some((structure) => {
+      if (level !== null && (structure.level ?? 0) !== level) return false;
       const size = Math.max(structure.w ?? 1, structure.h ?? 1) * 0.5;
       return Math.hypot(structure.x - x, structure.y - y) < radius + size;
     });
   }
 
-  hasStructureOverlap(originX, originY, w, h) {
+  hasStructureOverlap(originX, originY, w, h, level = null) {
     const minX = originX - 1;
     const minY = originY - 1;
     const maxX = originX + w + 1;
     const maxY = originY + h + 1;
     const structures = this.getStructuresInView(minX, minY, maxX, maxY);
     return structures.some((structure) => {
+      if (level !== null && (structure.level ?? 0) !== level) return false;
       const sMinX = structure.originX ?? structure.x - 0.5;
       const sMinY = structure.originY ?? structure.y - 0.5;
       const sW = structure.w ?? 1;
@@ -421,9 +424,41 @@ export class World {
     });
   }
 
+  hasSupportBelow(originX, originY, w, h, level) {
+    if (level <= 0) return true;
+    const supportLevel = level - 1;
+    const centerX = originX + w / 2;
+    const centerY = originY + h / 2;
+    const minX = originX - 1;
+    const minY = originY - 1;
+    const maxX = originX + w + 1;
+    const maxY = originY + h + 1;
+    const structures = this.getStructuresInView(minX, minY, maxX, maxY);
+    return structures.some((structure) => {
+      if ((structure.level ?? 0) !== supportLevel) return false;
+      const def = BUILDINGS[structure.type];
+      if (def?.supportsUpper === false) return false;
+      const sMinX = structure.originX ?? structure.x - 0.5;
+      const sMinY = structure.originY ?? structure.y - 0.5;
+      const sW = structure.w ?? 1;
+      const sH = structure.h ?? 1;
+      const overlaps = (
+        originX < sMinX + sW &&
+        originX + w > sMinX &&
+        originY < sMinY + sH &&
+        originY + h > sMinY
+      );
+      if (overlaps) return true;
+      const supportCenterX = sMinX + sW / 2;
+      const supportCenterY = sMinY + sH / 2;
+      return Math.hypot(centerX - supportCenterX, centerY - supportCenterY) <= 1.3;
+    });
+  }
+
   isPositionBlocked(x, y) {
     const structures = this.getStructuresInView(x - 1, y - 1, x + 1, y + 1);
     return structures.some((structure) => {
+      if ((structure.level ?? 0) > 0) return false;
       const def = BUILDINGS[structure.type];
       if (!def?.solid) return false;
       if (structure.type === "wood_gate" && structure.open) return false;
@@ -435,7 +470,7 @@ export class World {
     });
   }
 
-  findNearestStructure(x, y, range) {
+  findNearestStructure(x, y, range, level = null) {
     const minX = x - range;
     const maxX = x + range;
     const minY = y - range;
@@ -444,6 +479,7 @@ export class World {
     let closest = null;
     let closestDist = Infinity;
     structures.forEach((structure) => {
+      if (level !== null && (structure.level ?? 0) !== level) return;
       const dx = structure.x - x;
       const dy = structure.y - y;
       const dist = Math.hypot(dx, dy);

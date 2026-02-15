@@ -369,3 +369,61 @@ Updates (2026-02-05, backend guard for input table):
 
 Updates (2026-02-05, player schema migration safety):
 - Moved `identity` to the end of the `player` table and added a default value to avoid manual migration errors.
+
+Updates (2026-02-14, single-player UX + 3D building floors):
+- Shifted the runtime flow to single-player-first in `src/main.js`: removed auth/net startup friction and kept local simulation as the default path.
+- Reworked controls for less jank:
+  - Right-click (hold) now drives click-to-move pathing.
+  - Left-click is now the primary action (interact/gather/attack, and placement in build mode).
+  - Added floor selection controls for building (`Z`/`X`, `[`/`]`, and `Alt`+wheel).
+  - Added smoother camera look-ahead, but disabled look-ahead during build mode to keep placement stable.
+- Added vertical build support:
+  - Build previews now carry floor level metadata.
+  - World structures now store `level` and render in stacked pseudo-3D layers.
+  - Added `wood_floor` as a dedicated vertical building element.
+  - Added floor-aware placement validation and rendering-side depth cues.
+- Added upper-floor transparency behavior:
+  - Upper floors fade when the player is near or under them.
+  - `structureContext` now tracks `nearUpperFloor` and `underUpperFloor` and exposes those in `render_game_to_text`.
+- Updated in-canvas UX messaging/HUD copy for new controls and floor context.
+- Updated menu UI copy and styling to match the single-player builder direction.
+- Added a small starter resource kit for faster early building iteration (`campfire`, `wood_floor`, wood/stone/planks).
+
+Test log:
+- `npm run build` (pass).
+- Ran Playwright client with custom action bursts to validate controls and vertical build flow:
+  - `/tmp/web_actions_singleplayer.json`
+  - `/tmp/web_actions_vertical.json`
+  - `/tmp/web_actions_transparency.json`
+  - `/tmp/web_actions_underfloor_move.json`
+- Verified screenshots and state artifacts in `output/web-game`.
+- Confirmed upper-floor proximity flags in latest state (`output/web-game/state-0-1771102904944.json`):
+  - `nearUpperFloor: true`
+  - `underUpperFloor: true`
+
+TODOs (next agent):
+- Add explicit traversal mechanics (stairs/ladders and actual player floor transitions) so vertical play is fully mechanical, not just visual/placement-based.
+- Tune starter inventory for desired progression pacing once the new UX direction is finalized.
+- Decide whether to keep local-only as hard default or reintroduce a deliberate “enable online/multiplayer” menu toggle later.
+- Add a dedicated tutorial hint strip for new control mappings in first 60 seconds of gameplay.
+
+Updates (2026-02-15, inventory cleanup + loot sanity):
+- Removed blueprint/building items from normal inventory flow.
+  - `Game` no longer grants buildables as inventory blueprints.
+  - Starter inventory now contains only simple gather materials (wood/stone/berries).
+  - Added a safety scrub in `resetWorld()` to remove any lingering building IDs from inventory slots.
+  - Added inventory-level guard to reject `BUILDINGS` IDs in `Inventory.canAdd` / `Inventory.addItem`.
+- Fixed random passive loot issue:
+  - Creature drops/XP/defeat quest progress now require player-caused kills.
+  - Added a short player-damage attribution window (`lastDamagedByPlayer`) in `CreatureSystem`.
+  - Deaths from world simulation (predator fights/starvation/etc.) no longer auto-insert loot into player inventory.
+- Improved inventory readability:
+  - Reworked Inventory overlay summary into clearer sections: Materials, Loot, Crafted.
+  - Kept carry/backpack state visible and reduced noisy mixed stat lines.
+- Updated start menu controls text to avoid implying hotbar-based build selection.
+
+Validation:
+- `npm run build` passes after changes.
+- Playwright checks run against local dev server:
+  - `output/web-game/state-0-1771159755102.json` confirms `buildSlots: []`.
+  - Same state confirms no passive random loot (`meat/cooked/hide` remain `0` during idle inventory check).

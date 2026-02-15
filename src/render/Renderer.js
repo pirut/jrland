@@ -1,6 +1,6 @@
 import { CONFIG, BUILDINGS, PALETTE } from "../config.js";
 import { Random } from "../core/Random.js";
-import { clamp, roundedRect, formatClock } from "../utils/math.js";
+import { clamp, formatClock } from "../utils/math.js";
 import { hexToRgb, shadeColor } from "../utils/color.js";
 
 const paletteRgb = Object.fromEntries(
@@ -141,170 +141,297 @@ export class Renderer {
     return bounds;
   }
 
-  drawStructureShadow(x, y, width, height) {
+  drawStructureShadow(x, y, width, height, alpha = 1) {
     this.ctx.save();
-    this.ctx.fillStyle = "rgba(0,0,0,0.18)";
+    this.ctx.fillStyle = `rgba(0,0,0,${0.18 * alpha})`;
     this.ctx.fillRect(x + 3, y + height - 6, width - 6, 10);
     this.ctx.restore();
   }
 
+  getStructureRenderInfo(structure, bounds, tileSize) {
+    const originX = structure.originX ?? structure.x - 0.5;
+    const originY = structure.originY ?? structure.y - 0.5;
+    const w = structure.w ?? 1;
+    const h = structure.h ?? 1;
+    const level = structure.level ?? 0;
+    const levelOffset = level * tileSize * 0.68;
+    const px = (originX - bounds.minX) * tileSize;
+    const py = (originY - bounds.minY) * tileSize - levelOffset;
+    return {
+      originX,
+      originY,
+      w,
+      h,
+      level,
+      levelOffset,
+      px,
+      py,
+      width: w * tileSize,
+      height: h * tileSize,
+      centerX: (structure.x - bounds.minX) * tileSize,
+      centerY: (structure.y - bounds.minY) * tileSize - levelOffset,
+    };
+  }
+
+  getUpperFloorAlpha(game, structure) {
+    const level = structure.level ?? 0;
+    if (level <= (game.playerLevel ?? 0)) return 1;
+    const minX = structure.originX ?? structure.x - 0.5;
+    const minY = structure.originY ?? structure.y - 0.5;
+    const w = structure.w ?? 1;
+    const h = structure.h ?? 1;
+    const nearPad = 1.6;
+    const under =
+      game.player.x >= minX &&
+      game.player.x <= minX + w &&
+      game.player.y >= minY &&
+      game.player.y <= minY + h;
+    if (under) return 0.22;
+    const near =
+      game.player.x >= minX - nearPad &&
+      game.player.x <= minX + w + nearPad &&
+      game.player.y >= minY - nearPad &&
+      game.player.y <= minY + h + nearPad;
+    if (near) return 0.45;
+    return 1;
+  }
+
+  drawRaisedFloorDepth(info, alpha = 1) {
+    if (info.level <= 0 || info.levelOffset <= 0) return;
+    this.ctx.save();
+    this.ctx.fillStyle = `rgba(70, 58, 46, ${0.32 * alpha})`;
+    this.ctx.fillRect(info.px, info.py + info.height - 1, info.width, info.levelOffset + 1);
+    this.ctx.fillStyle = `rgba(88, 72, 58, ${0.25 * alpha})`;
+    this.ctx.fillRect(info.px + info.width - 3, info.py, 3, info.height + info.levelOffset);
+    this.ctx.restore();
+  }
+
   drawStructuresBase(game, tileSize, bounds) {
-    const structures = game.world.getStructuresInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
+    const structures = game.world
+      .getStructuresInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY)
+      .slice()
+      .sort((a, b) => {
+        const levelDiff = (a.level ?? 0) - (b.level ?? 0);
+        if (levelDiff !== 0) return levelDiff;
+        return (a.y ?? 0) - (b.y ?? 0);
+      });
     structures.forEach((structure) => {
-      const originX = structure.originX ?? structure.x - 0.5;
-      const originY = structure.originY ?? structure.y - 0.5;
-      const w = structure.w ?? 1;
-      const h = structure.h ?? 1;
+      const info = this.getStructureRenderInfo(structure, bounds, tileSize);
       if (
-        originX + w < bounds.minX ||
-        originX > bounds.maxX ||
-        originY + h < bounds.minY ||
-        originY > bounds.maxY
+        info.originX + info.w < bounds.minX ||
+        info.originX > bounds.maxX ||
+        info.originY + info.h < bounds.minY ||
+        info.originY > bounds.maxY
       ) {
         return;
       }
-      const px = (originX - bounds.minX) * tileSize;
-      const py = (originY - bounds.minY) * tileSize;
-      const width = w * tileSize;
-      const height = h * tileSize;
-      const centerX = (structure.x - bounds.minX) * tileSize;
-      const centerY = (structure.y - bounds.minY) * tileSize;
-      this.drawStructureShadow(px, py, width, height);
+      const alpha = this.getUpperFloorAlpha(game, structure);
+      this.drawStructureShadow(info.px, info.py + info.levelOffset, info.width, info.height, alpha);
+      this.drawRaisedFloorDepth(info, alpha);
+
       if (structure.type === "campfire") {
         const flicker = 0.5 + 0.5 * Math.sin(game.weather.fxTime * 6 + structure.x * 0.4);
-        this.ctx.fillStyle = `rgba(255, 193, 112, ${0.2 + flicker * 0.2})`;
+        this.ctx.fillStyle = `rgba(255, 193, 112, ${(0.2 + flicker * 0.2) * alpha})`;
         this.ctx.beginPath();
-        this.ctx.arc(centerX, centerY, tileSize * 0.75, 0, Math.PI * 2);
+        this.ctx.arc(info.centerX, info.centerY, tileSize * 0.75, 0, Math.PI * 2);
         this.ctx.fill();
-        this.ctx.fillStyle = "rgba(255, 185, 92, 0.9)";
+        this.ctx.fillStyle = `rgba(255, 185, 92, ${0.9 * alpha})`;
         this.ctx.beginPath();
-        this.ctx.arc(centerX, centerY, tileSize * 0.18, 0, Math.PI * 2);
+        this.ctx.arc(info.centerX, info.centerY, tileSize * 0.18, 0, Math.PI * 2);
         this.ctx.fill();
-        this.ctx.strokeStyle = "rgba(140, 86, 45, 0.8)";
+        this.ctx.strokeStyle = `rgba(140, 86, 45, ${0.8 * alpha})`;
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
-        this.ctx.arc(centerX, centerY, tileSize * 0.3, 0, Math.PI * 2);
+        this.ctx.arc(info.centerX, info.centerY, tileSize * 0.3, 0, Math.PI * 2);
         this.ctx.stroke();
       } else if (structure.type === "shelter") {
         const base = BUILDINGS.shelter?.baseSize ?? { w: 0.9, h: 0.5 };
-        this.ctx.fillStyle = "rgba(121, 106, 88, 0.92)";
+        this.ctx.fillStyle = `rgba(121, 106, 88, ${0.92 * alpha})`;
         this.ctx.fillRect(
-          centerX - (base.w * tileSize) / 2,
-          centerY - (base.h * tileSize) / 2,
+          info.centerX - (base.w * tileSize) / 2,
+          info.centerY - (base.h * tileSize) / 2,
           base.w * tileSize,
           base.h * tileSize
         );
-        this.ctx.fillStyle = "rgba(88, 73, 60, 0.85)";
+        this.ctx.fillStyle = `rgba(88, 73, 60, ${0.85 * alpha})`;
         this.ctx.fillRect(
-          centerX - (base.w * tileSize) / 3,
-          centerY - (base.h * tileSize) / 2,
+          info.centerX - (base.w * tileSize) / 3,
+          info.centerY - (base.h * tileSize) / 2,
           (base.w * tileSize) / 1.5,
           (base.h * tileSize) / 3
         );
       } else if (structure.type === "workbench") {
         const base = BUILDINGS.workbench?.baseSize ?? { w: 0.7, h: 0.35 };
-        this.ctx.fillStyle = "rgba(122, 96, 68, 0.9)";
+        this.ctx.fillStyle = `rgba(122, 96, 68, ${0.9 * alpha})`;
         this.ctx.fillRect(
-          centerX - (base.w * tileSize) / 2,
-          centerY - (base.h * tileSize) / 2,
+          info.centerX - (base.w * tileSize) / 2,
+          info.centerY - (base.h * tileSize) / 2,
           base.w * tileSize,
           base.h * tileSize
         );
-        this.ctx.fillStyle = "rgba(85, 67, 48, 0.9)";
+        this.ctx.fillStyle = `rgba(85, 67, 48, ${0.9 * alpha})`;
         this.ctx.fillRect(
-          centerX - (base.w * tileSize) / 2,
-          centerY - (base.h * tileSize) / 2,
+          info.centerX - (base.w * tileSize) / 2,
+          info.centerY - (base.h * tileSize) / 2,
           base.w * tileSize,
           (base.h * tileSize) / 3
         );
       } else if (structure.type === "hut") {
         const base = BUILDINGS.hut?.baseSize ?? { w: 1.1, h: 0.65 };
-        this.ctx.fillStyle = "rgba(110, 92, 75, 0.92)";
+        this.ctx.fillStyle = `rgba(110, 92, 75, ${0.92 * alpha})`;
         this.ctx.fillRect(
-          centerX - (base.w * tileSize) / 2,
-          centerY - (base.h * tileSize) / 2,
+          info.centerX - (base.w * tileSize) / 2,
+          info.centerY - (base.h * tileSize) / 2,
           base.w * tileSize,
           base.h * tileSize
         );
-        this.ctx.fillStyle = "rgba(84, 68, 52, 0.92)";
+        this.ctx.fillStyle = `rgba(84, 68, 52, ${0.92 * alpha})`;
         this.ctx.fillRect(
-          centerX - (base.w * tileSize) / 4,
-          centerY - (base.h * tileSize) / 4,
+          info.centerX - (base.w * tileSize) / 4,
+          info.centerY - (base.h * tileSize) / 4,
           (base.w * tileSize) / 2,
           (base.h * tileSize) / 2
         );
       } else if (structure.type === "lean_to") {
         const base = BUILDINGS.lean_to?.baseSize ?? { w: 0.9, h: 0.4 };
-        this.ctx.fillStyle = "rgba(116, 96, 76, 0.9)";
+        this.ctx.fillStyle = `rgba(116, 96, 76, ${0.9 * alpha})`;
         this.ctx.fillRect(
-          centerX - (base.w * tileSize) / 2,
-          centerY - (base.h * tileSize) / 2,
+          info.centerX - (base.w * tileSize) / 2,
+          info.centerY - (base.h * tileSize) / 2,
           base.w * tileSize,
           base.h * tileSize
         );
-        this.ctx.fillStyle = "rgba(86, 70, 54, 0.9)";
+        this.ctx.fillStyle = `rgba(86, 70, 54, ${0.9 * alpha})`;
         this.ctx.fillRect(
-          centerX - (base.w * tileSize) / 2,
-          centerY - (base.h * tileSize) / 2,
+          info.centerX - (base.w * tileSize) / 2,
+          info.centerY - (base.h * tileSize) / 2,
           base.w * tileSize,
           (base.h * tileSize) / 3
         );
       } else if (structure.type === "storage_crate") {
-        this.ctx.fillStyle = "rgba(132, 103, 74, 0.9)";
-        this.ctx.fillRect(px + tileSize * 0.15, py + tileSize * 0.25, width - tileSize * 0.3, height - tileSize * 0.3);
-        this.ctx.fillStyle = "rgba(96, 74, 52, 0.9)";
-        this.ctx.fillRect(px + tileSize * 0.15, py + tileSize * 0.25, width - tileSize * 0.3, tileSize * 0.12);
+        this.ctx.fillStyle = `rgba(132, 103, 74, ${0.9 * alpha})`;
+        this.ctx.fillRect(
+          info.px + tileSize * 0.15,
+          info.py + tileSize * 0.25,
+          info.width - tileSize * 0.3,
+          info.height - tileSize * 0.3
+        );
+        this.ctx.fillStyle = `rgba(96, 74, 52, ${0.9 * alpha})`;
+        this.ctx.fillRect(
+          info.px + tileSize * 0.15,
+          info.py + tileSize * 0.25,
+          info.width - tileSize * 0.3,
+          tileSize * 0.12
+        );
+      } else if (structure.type === "wood_floor") {
+        this.ctx.fillStyle = `rgba(126, 94, 66, ${0.9 * alpha})`;
+        this.ctx.fillRect(info.px + tileSize * 0.03, info.py + tileSize * 0.03, info.width - tileSize * 0.06, info.height - tileSize * 0.06);
+        this.ctx.strokeStyle = `rgba(88, 62, 40, ${0.85 * alpha})`;
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(
+          info.px + tileSize * 0.03,
+          info.py + tileSize * 0.03,
+          info.width - tileSize * 0.06,
+          info.height - tileSize * 0.06
+        );
+        this.ctx.strokeStyle = `rgba(74, 54, 36, ${0.55 * alpha})`;
+        this.ctx.beginPath();
+        this.ctx.moveTo(info.px + info.width * 0.33, info.py + tileSize * 0.08);
+        this.ctx.lineTo(info.px + info.width * 0.33, info.py + info.height - tileSize * 0.08);
+        this.ctx.moveTo(info.px + info.width * 0.66, info.py + tileSize * 0.08);
+        this.ctx.lineTo(info.px + info.width * 0.66, info.py + info.height - tileSize * 0.08);
+        this.ctx.stroke();
       } else if (structure.type === "wood_wall") {
-        this.ctx.fillStyle = "rgba(104, 78, 54, 0.95)";
-        this.ctx.fillRect(px + tileSize * 0.1, py + tileSize * 0.1, width - tileSize * 0.2, height - tileSize * 0.2);
-        this.ctx.fillStyle = "rgba(86, 64, 44, 0.9)";
-        this.ctx.fillRect(px + tileSize * 0.1, py + tileSize * 0.1, width - tileSize * 0.2, tileSize * 0.12);
+        this.ctx.fillStyle = `rgba(104, 78, 54, ${0.95 * alpha})`;
+        this.ctx.fillRect(
+          info.px + tileSize * 0.1,
+          info.py + tileSize * 0.1,
+          info.width - tileSize * 0.2,
+          info.height - tileSize * 0.2
+        );
+        this.ctx.fillStyle = `rgba(86, 64, 44, ${0.9 * alpha})`;
+        this.ctx.fillRect(
+          info.px + tileSize * 0.1,
+          info.py + tileSize * 0.1,
+          info.width - tileSize * 0.2,
+          tileSize * 0.12
+        );
       } else if (structure.type === "wood_gate") {
         if (structure.open) {
-          this.ctx.fillStyle = "rgba(112, 86, 60, 0.9)";
-          this.ctx.fillRect(px + tileSize * 0.12, py + tileSize * 0.12, tileSize * 0.18, height - tileSize * 0.24);
-          this.ctx.fillRect(px + width - tileSize * 0.3, py + tileSize * 0.12, tileSize * 0.18, height - tileSize * 0.24);
-          this.ctx.strokeStyle = "rgba(68, 52, 38, 0.9)";
-          this.ctx.strokeRect(px + tileSize * 0.1, py + tileSize * 0.12, width - tileSize * 0.2, height - tileSize * 0.24);
+          this.ctx.fillStyle = `rgba(112, 86, 60, ${0.9 * alpha})`;
+          this.ctx.fillRect(info.px + tileSize * 0.12, info.py + tileSize * 0.12, tileSize * 0.18, info.height - tileSize * 0.24);
+          this.ctx.fillRect(
+            info.px + info.width - tileSize * 0.3,
+            info.py + tileSize * 0.12,
+            tileSize * 0.18,
+            info.height - tileSize * 0.24
+          );
+          this.ctx.strokeStyle = `rgba(68, 52, 38, ${0.9 * alpha})`;
+          this.ctx.strokeRect(
+            info.px + tileSize * 0.1,
+            info.py + tileSize * 0.12,
+            info.width - tileSize * 0.2,
+            info.height - tileSize * 0.24
+          );
         } else {
-          this.ctx.fillStyle = "rgba(112, 86, 60, 0.95)";
-          this.ctx.fillRect(px + tileSize * 0.1, py + tileSize * 0.1, width - tileSize * 0.2, height - tileSize * 0.2);
-          this.ctx.strokeStyle = "rgba(68, 52, 38, 0.9)";
-          this.ctx.strokeRect(px + tileSize * 0.2, py + tileSize * 0.2, width - tileSize * 0.4, height - tileSize * 0.4);
+          this.ctx.fillStyle = `rgba(112, 86, 60, ${0.95 * alpha})`;
+          this.ctx.fillRect(
+            info.px + tileSize * 0.1,
+            info.py + tileSize * 0.1,
+            info.width - tileSize * 0.2,
+            info.height - tileSize * 0.2
+          );
+          this.ctx.strokeStyle = `rgba(68, 52, 38, ${0.9 * alpha})`;
+          this.ctx.strokeRect(
+            info.px + tileSize * 0.2,
+            info.py + tileSize * 0.2,
+            info.width - tileSize * 0.4,
+            info.height - tileSize * 0.4
+          );
         }
       }
     });
   }
 
   drawStructuresCanopy(game, tileSize, bounds) {
-    const structures = game.world.getStructuresInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY);
+    const structures = game.world
+      .getStructuresInView(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY)
+      .slice()
+      .sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
     structures.forEach((structure) => {
       const blueprint = BUILDINGS[structure.type];
       if (!blueprint?.canopy && !blueprint?.roof) return;
-      const originX = structure.originX ?? structure.x - 0.5;
-      const originY = structure.originY ?? structure.y - 0.5;
-      const w = structure.w ?? 1;
-      const h = structure.h ?? 1;
+      const info = this.getStructureRenderInfo(structure, bounds, tileSize);
       if (
-        originX + w < bounds.minX ||
-        originX > bounds.maxX ||
-        originY + h < bounds.minY ||
-        originY > bounds.maxY
+        info.originX + info.w < bounds.minX ||
+        info.originX > bounds.maxX ||
+        info.originY + info.h < bounds.minY ||
+        info.originY > bounds.maxY
       ) {
         return;
       }
-      const roof = blueprint.roof ?? { w, h, offsetY: 0 };
+      const roof = blueprint.roof ?? { w: info.w, h: info.h, offsetY: 0 };
       const roofCenterX = structure.x;
       const roofCenterY = structure.y + (roof.offsetY ?? 0);
       const under =
-        Math.abs(game.player.x - roofCenterX) <= (roof.w ?? w) / 2 &&
-        Math.abs(game.player.y - roofCenterY) <= (roof.h ?? h) / 2;
-      const alpha = under ? 0.3 : 0.9;
+        Math.abs(game.player.x - roofCenterX) <= (roof.w ?? info.w) / 2 &&
+        Math.abs(game.player.y - roofCenterY) <= (roof.h ?? info.h) / 2;
+      const upperFade = this.getUpperFloorAlpha(game, structure);
+      const alpha = Math.max(0.15, (under ? 0.35 : 0.9) * upperFade);
       const px = (roofCenterX - bounds.minX) * tileSize;
-      const py = (roofCenterY - bounds.minY) * tileSize;
-      const roofW = (roof.w ?? w) * tileSize;
-      const roofH = (roof.h ?? h) * tileSize;
+      const py = (roofCenterY - bounds.minY) * tileSize - info.levelOffset;
+      const roofW = (roof.w ?? info.w) * tileSize;
+      const roofH = (roof.h ?? info.h) * tileSize;
       this.ctx.save();
+      if (info.level > 0) {
+        this.ctx.fillStyle = `rgba(68, 54, 42, ${0.24 * alpha})`;
+        this.ctx.fillRect(
+          px - roofW / 2 + tileSize * 0.06,
+          py + roofH / 2 - tileSize * 0.05,
+          roofW - tileSize * 0.12,
+          info.levelOffset + tileSize * 0.05
+        );
+      }
       this.ctx.fillStyle = `rgba(28, 24, 22, ${0.12 + alpha * 0.2})`;
       this.ctx.fillRect(px - roofW / 2 + tileSize * 0.1, py - roofH / 2 + tileSize * 0.1, roofW, roofH);
       this.ctx.fillStyle = `rgba(96, 82, 68, ${alpha})`;
@@ -439,8 +566,10 @@ export class Renderer {
   drawBuildPreview(game, tileSize, bounds) {
     if (!game.build.active || !game.build.preview) return;
     const preview = game.build.preview;
+    const level = preview.level ?? 0;
+    const levelOffset = level * tileSize * 0.68;
     const px = (preview.originX - bounds.minX) * tileSize;
-    const py = (preview.originY - bounds.minY) * tileSize;
+    const py = (preview.originY - bounds.minY) * tileSize - levelOffset;
     const width = preview.w * tileSize;
     const height = preview.h * tileSize;
     const color = preview.valid ? "rgba(84, 150, 108, 0.6)" : "rgba(180, 80, 64, 0.6)";
@@ -459,6 +588,12 @@ export class Renderer {
       this.ctx.fillRect(px, py, width, height);
       this.ctx.strokeRect(px, py, width, height);
     }
+    if (level > 0) {
+      this.ctx.fillStyle = preview.valid ? "rgba(84, 150, 108, 0.16)" : "rgba(180, 80, 64, 0.16)";
+      this.ctx.fillRect(px, py + height - 1, width, levelOffset + 1);
+      this.ctx.strokeStyle = preview.valid ? "rgba(84,150,108,0.25)" : "rgba(180,80,64,0.25)";
+      this.ctx.strokeRect(px, py + height - 1, width, levelOffset + 1);
+    }
     this.ctx.strokeStyle = preview.valid ? "rgba(84,150,108,0.35)" : "rgba(180,80,64,0.35)";
     this.ctx.lineWidth = 1;
     for (let y = 0; y < preview.h; y += 1) {
@@ -466,6 +601,9 @@ export class Renderer {
         this.ctx.strokeRect(px + x * tileSize, py + y * tileSize, tileSize, tileSize);
       }
     }
+    this.ctx.fillStyle = preview.valid ? "rgba(34, 72, 54, 0.9)" : "rgba(96, 42, 34, 0.92)";
+    this.ctx.font = "11px 'Manrope', sans-serif";
+    this.ctx.fillText(`Floor ${level + 1}`, px + 6, py - 6);
     this.ctx.restore();
   }
 
@@ -484,8 +622,12 @@ export class Renderer {
     this.ctx.stroke();
     this.ctx.fillStyle = `rgba(15, 20, 23, ${0.6 + pulse * 0.3})`;
     this.ctx.font = "12px 'Manrope', sans-serif";
-    const keyLabel = game.interaction.kind === "enemy" ? "Space" : "E";
-    this.ctx.fillText(keyLabel, px - (game.interaction.kind === "enemy" ? 16 : 3), py - tileSize * 0.55);
+    const keyLabel = game.interaction.kind === "enemy" ? "LMB" : "LMB / E";
+    this.ctx.fillText(
+      keyLabel,
+      px - (game.interaction.kind === "enemy" ? 14 : 24),
+      py - tileSize * 0.55
+    );
     if (game.interaction.kind === "structure") {
       const label =
         target.type === "campfire"
@@ -679,8 +821,10 @@ export class Renderer {
       `Season ${season}`,
       `Drought ${drought}`,
       `Level ${game.progression.level}`,
+      `Build Floor ${game.build.level + 1}`,
       `Event ${eventLabel}`,
       `Near ${nearby || "None"}`,
+      `Upper Floor ${game.structureContext.nearUpperFloor ? "Near" : "Far"}`,
       `Under ${game.structureContext.underCanopy ? "Canopy" : "Open"}`,
     ];
   }

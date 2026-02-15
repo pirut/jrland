@@ -1,5 +1,6 @@
 import { getInventoryLayout } from "./inventoryLayout.js";
 import { ITEMS, CRAFTING_RECIPES } from "../config.js";
+import { getInventoryTabModel } from "./inventoryTabs.js";
 
 export class InventoryUI {
   constructor() {
@@ -104,6 +105,7 @@ export class InventoryUI {
 
   handleClick(game, x, y, button = 0, mods = {}) {
     const layout = this.getLayout(game);
+    const tabModel = getInventoryTabModel(game, layout);
     const inside =
       x >= layout.panel.x &&
       x <= layout.panel.x + layout.panel.w &&
@@ -116,6 +118,18 @@ export class InventoryUI {
     this.cursor = game.ui.cursorItem;
     if (game.ui.splitPicker?.active) {
       this.handleSplitPickerClick(game, x, y);
+      return;
+    }
+
+    const hit = (rect) =>
+      rect && x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+
+    const clickedTab = tabModel.tabs.find((tab) => hit(tab.bounds));
+    if (clickedTab) {
+      game.ui.inventoryTab = clickedTab.id;
+      game.ui.inventoryTabLayout = tabModel.tabs;
+      game.ui.splitPicker = null;
+      game.ui.splitPickerLayout = null;
       return;
     }
     if (
@@ -156,30 +170,64 @@ export class InventoryUI {
       return;
     }
 
-    for (let i = 0; i < game.inventory.slots.length; i += 1) {
-      const rect = layout.slots[i];
+    for (let i = 0; i < tabModel.backpackSlots.length; i += 1) {
+      const entry = tabModel.backpackSlots[i];
+      const rect = entry.rect;
       if (!rect) continue;
-      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+      if (hit(rect)) {
+        const slot = game.inventory.slots[entry.inventoryIndex];
+        if (!slot) continue;
         if (mods.shiftKey && this.cursor) {
-          if (this.openSplitPickerFromCursor(game, game.inventory.slots[i])) {
+          if (this.openSplitPickerFromCursor(game, slot)) {
             return;
           }
         }
         if (mods.shiftKey && button === 0 && !this.cursor) {
           if (layout.hasStorage) {
-            const moved = this.quickTransfer(game.inventory.slots[i], game.storage.getActiveContainer()?.slots ?? []);
+            const moved = this.quickTransfer(slot, game.storage.getActiveContainer()?.slots ?? []);
             if (moved) {
               game.ui.cursorItem = this.cursor;
               return;
             }
-          } else if (this.openSplitPicker(game, game.inventory.slots[i])) {
+          } else if (this.openSplitPicker(game, slot)) {
             return;
           }
         }
-        if (mods.shiftKey && button === 2 && !this.cursor && this.openSplitPicker(game, game.inventory.slots[i])) {
+        if (mods.shiftKey && button === 2 && !this.cursor && this.openSplitPicker(game, slot)) {
           return;
         }
-        this.cursor = this.handleSlotClickAdvanced(game.inventory.slots[i], this.cursor, button);
+        this.cursor = this.handleSlotClickAdvanced(slot, this.cursor, button);
+        game.ui.cursorItem = this.cursor;
+        return;
+      }
+    }
+
+    for (let i = 0; i < 9; i += 1) {
+      const rect = layout.hotbarRects[i];
+      if (!rect) continue;
+      if (hit(rect)) {
+        const slot = game.inventory.slots[i];
+        if (!slot) continue;
+        if (mods.shiftKey && this.cursor) {
+          if (this.openSplitPickerFromCursor(game, slot)) {
+            return;
+          }
+        }
+        if (mods.shiftKey && button === 0 && !this.cursor) {
+          if (layout.hasStorage) {
+            const moved = this.quickTransfer(slot, game.storage.getActiveContainer()?.slots ?? []);
+            if (moved) {
+              game.ui.cursorItem = this.cursor;
+              return;
+            }
+          } else if (this.openSplitPicker(game, slot)) {
+            return;
+          }
+        }
+        if (mods.shiftKey && button === 2 && !this.cursor && this.openSplitPicker(game, slot)) {
+          return;
+        }
+        this.cursor = this.handleSlotClickAdvanced(slot, this.cursor, button);
         game.ui.cursorItem = this.cursor;
         return;
       }
@@ -188,7 +236,7 @@ export class InventoryUI {
     for (let i = 0; i < game.craftingGrid.length; i += 1) {
       const rect = layout.craftSlots[i];
       if (!rect) continue;
-      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+      if (hit(rect)) {
         this.cursor = this.handleSlotClickAdvanced(game.craftingGrid[i], this.cursor, button);
         game.ui.cursorItem = this.cursor;
         return;
@@ -201,7 +249,7 @@ export class InventoryUI {
         for (let i = 0; i < storage.slots.length; i += 1) {
           const rect = layout.storageSlots[i];
           if (!rect) continue;
-          if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) {
+          if (hit(rect)) {
             if (mods.shiftKey && this.cursor) {
               if (this.openSplitPickerFromCursor(game, storage.slots[i])) {
                 return;

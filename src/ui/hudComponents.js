@@ -3,6 +3,7 @@ import { clamp } from "../utils/math.js";
 import { drawItemIcon } from "./icons.js";
 import { getInventoryLayout } from "./inventoryLayout.js";
 import { getHotbarLayout } from "./hotbarLayout.js";
+import { getInventoryTabModel } from "./inventoryTabs.js";
 
 export class StatusBars {
   constructor(ctx) {
@@ -593,6 +594,8 @@ export class InventoryOverlay {
   draw(game) {
     if (!game.ui.inventoryOpen) return;
     const layout = getInventoryLayout(game);
+    const tabModel = getInventoryTabModel(game, layout);
+    game.ui.inventoryTabLayout = tabModel.tabs;
     const x = layout.panel.x;
     const y = layout.panel.y;
     const panelWidth = layout.panel.w;
@@ -608,16 +611,20 @@ export class InventoryOverlay {
     this.ctx.strokeRect(x, y, panelWidth, panelHeight);
 
     this.ctx.fillStyle = "rgba(228, 236, 228, 0.92)";
-    this.ctx.fillRect(x + 1, y + 1, panelWidth - 2, 34);
+    this.ctx.fillRect(x + 1, y + 1, panelWidth - 2, layout.headerHeight - 10);
     this.ctx.fillStyle = "rgba(18, 28, 22, 0.9)";
     this.ctx.font = "700 18px 'Manrope', sans-serif";
-    this.ctx.fillText("Inventory", x + 16, y + 23);
+    this.ctx.fillText("Inventory", x + 16, layout.headerY + 18);
     this.ctx.font = "12px 'Manrope', sans-serif";
     this.ctx.fillStyle = "rgba(26, 36, 30, 0.7)";
-    this.ctx.fillText("Sort, craft, and manage carried gear", x + 130, y + 22);
+    this.ctx.fillText("Clean tabs, clear stacks, and fast crafting", x + 130, layout.headerY + 17);
+    this.drawInventoryTabs(tabModel.tabs);
 
-    const gridW = 9 * (layout.slotSize + layout.gap) - layout.gap;
-    const gridH = 3 * (layout.slotSize + layout.gap) - layout.gap;
+    const firstBackpack = layout.backpackRects[0];
+    const topRightBackpack = layout.backpackRects[8];
+    const bottomBackpack = layout.backpackRects[layout.backpackRects.length - 1];
+    const gridW = topRightBackpack.x + topRightBackpack.w - firstBackpack.x;
+    const gridH = bottomBackpack.y + bottomBackpack.h - firstBackpack.y;
     this.drawSectionCard(layout.gridX - 12, layout.gridY - 14, gridW + 24, gridH + 28, "Backpack");
     this.drawSectionCard(layout.gridX - 12, layout.hotbarY - 14, gridW + 24, layout.slotSize + 28, "Hotbar");
 
@@ -645,10 +652,14 @@ export class InventoryOverlay {
     this.drawSectionCard(statsX, statsY, statsW, statsH, "At a Glance");
 
     this.ctx.font = "12px 'Manrope', sans-serif";
-    game.inventory.slots.forEach((slot, index) => {
-      const rect = layout.slots[index];
+    tabModel.backpackSlots.forEach((entry) => {
+      if (!entry.rect) return;
+      this.drawSlot(entry.rect, entry.slot, false, entry.dimmed);
+    });
+
+    layout.hotbarRects.forEach((rect, index) => {
       if (!rect) return;
-      this.drawSlot(rect, slot, game.ui.activeHotbarIndex === index);
+      this.drawSlot(rect, game.inventory.slots[index], game.ui.activeHotbarIndex === index, false);
     });
 
     game.craftingGrid.forEach((slot, index) => {
@@ -682,7 +693,7 @@ export class InventoryOverlay {
     this.ctx.fillText(
       "Shift+Click transfer · Right-click split · Shift+Click output craft-all",
       layout.gridX - 4,
-      y + panelHeight - 18
+      layout.footerY + 44
     );
 
     if (layout.hasStorage) {
@@ -696,7 +707,7 @@ export class InventoryOverlay {
       }
     }
 
-    const hover = this.getHoverSlot(game, layout, output);
+    const hover = this.getHoverSlot(game, layout, output, tabModel);
     if (hover) {
       this.drawTooltip(hover, game.ui.mouseX, game.ui.mouseY);
     }
@@ -725,14 +736,36 @@ export class InventoryOverlay {
     this.ctx.fillText(label, x + 8, y + 14);
   }
 
-  drawSlot(rect, slot, active = false) {
-    this.ctx.fillStyle = active ? "rgba(230, 245, 234, 0.95)" : "rgba(255, 255, 255, 0.9)";
+  drawInventoryTabs(tabs) {
+    tabs.forEach((tab) => {
+      const { bounds } = tab;
+      this.ctx.fillStyle = tab.active ? "rgba(47, 111, 79, 0.2)" : "rgba(255,255,255,0.72)";
+      this.ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
+      this.ctx.strokeStyle = tab.active ? "rgba(47, 111, 79, 0.72)" : "rgba(36, 52, 42, 0.22)";
+      this.ctx.lineWidth = tab.active ? 2 : 1;
+      this.ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+      this.ctx.fillStyle = "rgba(18, 28, 22, 0.86)";
+      this.ctx.font = tab.active ? "700 12px 'Manrope', sans-serif" : "600 12px 'Manrope', sans-serif";
+      this.ctx.fillText(tab.label, bounds.x + 10, bounds.y + 16);
+    });
+  }
+
+  drawSlot(rect, slot, active = false, dimmed = false) {
+    const alpha = dimmed ? 0.64 : 0.9;
+    this.ctx.fillStyle = active ? "rgba(230, 245, 234, 0.95)" : `rgba(255, 255, 255, ${alpha})`;
     this.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-    this.ctx.strokeStyle = active ? "rgba(48, 112, 72, 0.75)" : "rgba(0, 0, 0, 0.24)";
+    this.ctx.strokeStyle = active
+      ? "rgba(48, 112, 72, 0.75)"
+      : dimmed
+        ? "rgba(26, 36, 30, 0.16)"
+        : "rgba(0, 0, 0, 0.24)";
     this.ctx.lineWidth = active ? 2 : 1;
     this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
     if (!slot?.id) return;
+    this.ctx.save();
+    if (dimmed) this.ctx.globalAlpha = 0.62;
     drawItemIcon(this.ctx, slot.id, rect.x + 8, rect.y + 8, 2);
+    this.ctx.restore();
     if (slot.count > 1) {
       this.ctx.fillStyle = "rgba(18, 28, 22, 0.8)";
       this.ctx.font = "700 12px 'Manrope', sans-serif";
@@ -743,37 +776,39 @@ export class InventoryOverlay {
   drawInventoryStats(game, layout, x, y, w) {
     const pad = 10;
     const chipGap = 6;
-    const chipH = 20;
+    const chipH = 18;
     const textColor = "rgba(24, 36, 28, 0.78)";
-    const chip2W = Math.floor((w - pad * 2 - chipGap) / 2);
-    const chip3W = Math.floor((w - pad * 2 - chipGap * 2) / 3);
-    const drawChip = (chipX, chipY, chipW, id, label) => {
+    const chipW = Math.floor((w - pad * 2 - chipGap) / 2);
+    const summaryItems = [
+      { id: "wood", label: "Wood" },
+      { id: "stone", label: "Stone" },
+      { id: "planks", label: "Planks" },
+      { id: "berry", label: "Berries" },
+      { id: "meat", label: "Meat" },
+      { id: "cooked_meat", label: "Cooked" },
+      { id: "hide", label: "Hide" },
+    ];
+    const drawChip = (chipX, chipY, id, label) => {
       this.ctx.fillStyle = "rgba(255,255,255,0.9)";
       this.ctx.fillRect(chipX, chipY, chipW, chipH);
       this.ctx.strokeStyle = "rgba(34, 52, 42, 0.18)";
       this.ctx.strokeRect(chipX, chipY, chipW, chipH);
-      drawItemIcon(this.ctx, id, chipX + 5, chipY + 4, 2);
+      drawItemIcon(this.ctx, id, chipX + 4, chipY + 3, 2);
       this.ctx.fillStyle = textColor;
       this.ctx.font = "11px 'Manrope', sans-serif";
-      this.ctx.fillText(label, chipX + 24, chipY + 13);
+      this.ctx.fillText(label, chipX + 22, chipY + 12);
       this.ctx.font = "700 11px 'Manrope', sans-serif";
-      this.ctx.fillText(String(game.inventory.getCount(id)), chipX + chipW - 14, chipY + 13);
+      this.ctx.fillText(String(game.inventory.getCount(id)), chipX + chipW - 12, chipY + 12);
     };
 
     this.ctx.fillStyle = "rgba(18, 32, 24, 0.9)";
     this.ctx.font = "700 12px 'Manrope', sans-serif";
-    this.ctx.fillText("Materials", x + pad, y + 24);
-    drawChip(x + pad, y + 30, chip2W, "wood", "Wood");
-    drawChip(x + pad + chip2W + chipGap, y + 30, chip2W, "stone", "Stone");
-    drawChip(x + pad, y + 30 + chipH + 6, chip2W, "planks", "Planks");
-    drawChip(x + pad + chip2W + chipGap, y + 30 + chipH + 6, chip2W, "berry", "Berries");
-
-    this.ctx.fillStyle = "rgba(18, 32, 24, 0.9)";
-    this.ctx.font = "700 12px 'Manrope', sans-serif";
-    this.ctx.fillText("Loot", x + pad, y + 92);
-    drawChip(x + pad, y + 98, chip3W, "meat", "Meat");
-    drawChip(x + pad + chip3W + chipGap, y + 98, chip3W, "cooked_meat", "Cooked");
-    drawChip(x + pad + (chip3W + chipGap) * 2, y + 98, chip3W, "hide", "Hide");
+    this.ctx.fillText("Totals", x + pad, y + 24);
+    summaryItems.forEach((item, idx) => {
+      const col = idx % 2;
+      const row = Math.floor(idx / 2);
+      drawChip(x + pad + col * (chipW + chipGap), y + 30 + row * (chipH + 4), item.id, item.label);
+    });
 
     const shortGearLabel = (value) => {
       if (value === "reinforced_axe") return "R Axe";
@@ -785,35 +820,44 @@ export class InventoryOverlay {
       if (value === "hide_armor") return "Hide Armor";
       return "None";
     };
+    const equipY = y + 30 + Math.ceil(summaryItems.length / 2) * (chipH + 4) + 2;
     this.ctx.fillStyle = "rgba(18, 32, 24, 0.9)";
     this.ctx.font = "700 12px 'Manrope', sans-serif";
-    this.ctx.fillText("Equipped", x + pad, y + 132);
-    const gearRows = [
-      [`Axe ${shortGearLabel(game.gear.axe)}`, `Pick ${shortGearLabel(game.gear.pick)}`],
-      [`Weapon ${shortGearLabel(game.gear.weapon)}`, `Armor ${shortGearLabel(game.gear.armor)}`],
-    ];
+    this.ctx.fillText("Equipped", x + pad, equipY);
     this.ctx.fillStyle = "rgba(24, 36, 28, 0.74)";
-    this.ctx.font = "11px 'Manrope', sans-serif";
-    gearRows.forEach((row, rowIndex) => {
-      this.ctx.fillText(row[0], x + pad, y + 148 + rowIndex * 14);
-      this.ctx.fillText(row[1], x + pad + 112, y + 148 + rowIndex * 14);
-    });
+    this.ctx.font = "10px 'Manrope', sans-serif";
     this.ctx.fillText(
-      `Carry ${game.inventory.count()}/${game.inventory.capacity()} · Backpack ${
-        game.gear.backpack ? "Yes" : "No"
-      }`,
+      `Axe ${shortGearLabel(game.gear.axe)} · Pick ${shortGearLabel(game.gear.pick)}`,
       x + pad,
-      y + 178
+      equipY + 13
+    );
+    this.ctx.fillText(
+      `Weapon ${shortGearLabel(game.gear.weapon)} · Armor ${shortGearLabel(game.gear.armor)}`,
+      x + pad,
+      equipY + 25
+    );
+    this.ctx.fillText(
+      `Carry ${game.inventory.count()}/${game.inventory.capacity()} · Backpack ${game.gear.backpack ? "Yes" : "No"}`,
+      x + pad,
+      equipY + 37
     );
   }
 
-  getHoverSlot(game, layout, output) {
+  getHoverSlot(game, layout, output, tabModel) {
     const { mouseX, mouseY } = game.ui;
     const hit = (rect) =>
       rect && mouseX >= rect.x && mouseX <= rect.x + rect.w && mouseY >= rect.y && mouseY <= rect.y + rect.h;
 
-    for (let i = 0; i < game.inventory.slots.length; i += 1) {
-      const rect = layout.slots[i];
+    for (let i = 0; i < tabModel.backpackSlots.length; i += 1) {
+      const entry = tabModel.backpackSlots[i];
+      if (!entry.rect || !hit(entry.rect)) continue;
+      const slot = entry.slot;
+      if (!slot?.id) return null;
+      return { id: slot.id, count: slot.count };
+    }
+
+    for (let i = 0; i < 9; i += 1) {
+      const rect = layout.hotbarRects[i];
       if (!rect || !hit(rect)) continue;
       const slot = game.inventory.slots[i];
       if (!slot?.id) return null;

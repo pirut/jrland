@@ -11,6 +11,8 @@ export class UIState {
     this.showProgress = true;
     this.showNetStatus = false;
     this.inventoryOpen = false;
+    this.inventoryTab = "all";
+    this.inventoryTabLayout = null;
     this.activeHotbarIndex = 0;
     this.cursorItem = null;
     this.mouseX = 0;
@@ -25,6 +27,9 @@ export class UIState {
 
   toggleInventory() {
     this.inventoryOpen = !this.inventoryOpen;
+    if (!this.inventoryOpen) {
+      this.inventoryTabLayout = null;
+    }
   }
 
   setOption(key, value) {

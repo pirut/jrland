@@ -158,6 +158,7 @@ async function bootstrap() {
     if (game.ui.inventoryOpen) {
       if (event.key === "Escape" || key === "i") {
         game.ui.inventoryOpen = false;
+        game.ui.inventoryTabLayout = null;
         game.storage.close();
         game.mode = "playing";
       }
@@ -180,7 +181,11 @@ async function bootstrap() {
 
     if (key === "i" && game.mode === "playing") {
       game.ui.inventoryOpen = !game.ui.inventoryOpen;
+      if (game.ui.inventoryOpen) {
+        game.ui.inventoryTab = "all";
+      }
       if (!game.ui.inventoryOpen) {
+        game.ui.inventoryTabLayout = null;
         game.storage.close();
       }
       game.mode = game.ui.inventoryOpen ? "inventory" : "playing";
@@ -204,6 +209,7 @@ async function bootstrap() {
 
     if (key === "c" && !game.input.isDown("c") && game.mode === "playing") {
       game.ui.inventoryOpen = true;
+      game.ui.inventoryTab = "all";
       game.mode = "inventory";
       game.emitAction("toggle_inventory", { open: true, source: "craft" });
       return;

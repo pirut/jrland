@@ -442,3 +442,20 @@ Test log:
 - `npm run build` passed.
 - Playwright inventory-open scenario rerun.
 - Latest visual check: `output/web-game/shot-0-1771188400540.png`.
+
+Updates (2026-02-15, inventory UX tab pass):
+- Added a real tabbed inventory model with `All`, `Materials`, `Loot`, and `Gear` filters.
+- Introduced shared tab mapping (`src/ui/inventoryTabs.js`) so draw order and click handling use the same slot map.
+- Reworked inventory layout spacing (header/tabs/slot geometry) and added explicit backpack/hotbar rect maps.
+- Updated inventory click handling to support tab clicks and filtered backpack interactions without slot mismatch.
+- Refined overlay presentation: tab row in header, dimmed non-matching slots in filtered tabs, cleaner section cards, and compact stats/equipped summary.
+- Inventory-open state now tracks/clears tab layout safely across open/close/reset flows.
+
+Test log:
+- `npm run build` passed.
+- Ran Playwright inventory open scenario (`/tmp/web_actions_open_inventory.json`) and verified updated panel render (`output/web-game/shot-0-1771189247870.png`).
+- Ran Playwright tab interaction scenario (`/tmp/web_actions_inventory_tabs.json`) and confirmed tab clicks changed active tab in state (`output/web-game/state-0-1771189188131.json` shows `inventoryTab: "materials"`).
+
+TODOs (next agent):
+- Consider adding a "Sort" button per tab (stack consolidation + type grouping) for one-click cleanup.
+- Consider replacing text labels in tabs with compact icon+label chips to improve scan speed at small viewport sizes.

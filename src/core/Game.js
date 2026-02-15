@@ -197,6 +197,8 @@ export class Game {
     this.chat.input = "";
     this.chat.open = false;
     this.ui.inventoryOpen = false;
+    this.ui.inventoryTab = "all";
+    this.ui.inventoryTabLayout = null;
     this.ui.cursorItem = null;
     this.ui.activeHotbarIndex = 0;
     this.craftingGrid = Array.from({ length: 4 }, () => ({ id: null, count: 0 }));
@@ -641,6 +643,7 @@ export class Game {
     if (structure.type === "workbench") {
       this.storage.close();
       this.ui.inventoryOpen = true;
+      this.ui.inventoryTab = "all";
       this.mode = "inventory";
       this.notifications.push("Workbench ready");
       this.emitAction("interact", { type: "workbench", action: "open" });
@@ -649,6 +652,7 @@ export class Game {
     if (structure.type === "storage_crate") {
       this.storage.open(structure.id);
       this.ui.inventoryOpen = true;
+      this.ui.inventoryTab = "all";
       this.mode = "inventory";
       this.notifications.push("Storage opened");
       this.emitAction("interact", { type: "storage_crate", action: "open" });

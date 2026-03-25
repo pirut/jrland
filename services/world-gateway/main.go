@@ -195,6 +195,23 @@ func (s *server) handleResolve(w http.ResponseWriter, r *http.Request) {
 	}
 	response, err := s.issueWorldTicket(r.Context(), req.UserID, character.ID, regionID, character.Name)
 	if err != nil {
+		if regionID != s.cfg.defaultRegionID {
+			log.Printf("repairing stranded character %s from %s to %s after resolve error: %v", character.ID, regionID, s.cfg.defaultRegionID, err)
+			character.RegionID = s.cfg.defaultRegionID
+			character.X = 8
+			character.Y = 38
+			character.Z = 8
+			if saveErr := s.store.SaveCharacter(r.Context(), character); saveErr == nil {
+				response, err = s.issueWorldTicket(r.Context(), req.UserID, character.ID, character.RegionID, character.Name)
+				if err == nil {
+					writeJSON(w, http.StatusOK, response)
+					return
+				}
+				log.Printf("fallback world resolve failed for %s: %v", character.ID, err)
+			} else {
+				log.Printf("failed to repair stranded character %s: %v", character.ID, saveErr)
+			}
+		}
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}

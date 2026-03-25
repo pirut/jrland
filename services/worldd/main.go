@@ -450,6 +450,7 @@ func (s *worldServer) beginHandoff(player *playerSession, targetRegionID string)
 		player.mu.Unlock()
 		return
 	}
+	originalSnapshot := *player.character
 	snapshot := *player.character
 	snapshot.X = player.position.X
 	snapshot.Y = player.position.Y
@@ -472,7 +473,7 @@ func (s *worldServer) beginHandoff(player *playerSession, targetRegionID string)
 	defer cancel()
 
 	if err := s.store.SaveCharacter(ctx, &snapshot); err != nil {
-		s.clearHandoff(player)
+		s.rollbackHandoff(player, &originalSnapshot)
 		s.sendPlayerError(player, "HANDOFF_SAVE_FAILED", "Could not checkpoint character state for region handoff.")
 		return
 	}
@@ -484,7 +485,7 @@ func (s *worldServer) beginHandoff(player *playerSession, targetRegionID string)
 		RegionID:    targetRegionID,
 	})
 	if err != nil {
-		s.clearHandoff(player)
+		s.rollbackHandoff(player, &originalSnapshot)
 		s.sendPlayerError(player, "HANDOFF_UNAVAILABLE", "Could not resolve the next world region.")
 		return
 	}
@@ -504,6 +505,7 @@ func (s *worldServer) beginHandoff(player *playerSession, targetRegionID string)
 			},
 		},
 	}); err != nil {
+		s.rollbackHandoff(player, &originalSnapshot)
 		log.Printf("send handoff prepare: %v", err)
 	}
 }
@@ -514,6 +516,16 @@ func (s *worldServer) clearHandoff(player *playerSession) {
 	player.handoffAt = time.Time{}
 	player.character.RegionID = s.cfg.regionID
 	player.mu.Unlock()
+}
+
+func (s *worldServer) rollbackHandoff(player *playerSession, original *storage.Character) {
+	s.clearHandoff(player)
+	if original == nil {
+		return
+	}
+	if err := s.store.SaveCharacter(context.Background(), original); err != nil {
+		log.Printf("rollback handoff state: %v", err)
+	}
 }
 
 func (s *worldServer) takePendingTransfer(characterID string) *handoffTransfer {

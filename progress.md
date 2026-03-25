@@ -1,14 +1,18 @@
 Original prompt: I want to make an MMO game. I want it to be a simple survival game for now. This is going to be a long term project so make sure you lay a good foundation so I can add in systems as I go. and make good notes so future agents can work on this. The game can be a simple 2d game with a procedurally generated world. The setting should be realistic and the art style should be minimalist
 
 Updates (2026-03-25, home server deployment pass):
+- Fixed a server-side handoff persistence bug in `services/worldd/main.go` where a failed region transfer could save the character into an undeployed target region and strand the next login.
+- Added login-time recovery in `services/world-gateway/main.go` so a character stuck in an unavailable region is reset to the safe default spawn in `region-0-0` and can re-enter the world.
 - Added browser-side recovery for Nakama device-auth username collisions in `apps/web/src/net/NakamaClient.js`; the client now rotates to a fresh generated username instead of falling back to offline mode when a cached/random handle is already taken.
 - Fixed the auth error classifiers to match `nakama-js` fetch behavior, which throws the raw `Response` object on failed auth requests.
 - Verified the recovery path against a local production build wired to `api.land.jrbussard.com` by forcing `jrland.username=probe` in `localStorage`; the client retried, landed in the live shared world, and kept `wss://world.land.jrbussard.com/r0/world` connected.
 
 Test log:
 - `npm run build -w apps/web` passed after the username-collision recovery changes.
+- `go test ./...` passed after the handoff persistence fix and stranded-character fallback.
 - `VITE_NAKAMA_HOST=api.land.jrbussard.com VITE_NAKAMA_PORT=443 VITE_NAKAMA_SSL=true VITE_NAKAMA_SERVER_KEY=030231627fbcdbd667345c639470753d npm run build -w apps/web` passed for a production-configured browser test.
 - Ran the `develop-web-game` Playwright client against the local production preview and captured successful live-world states in `output/web-game/state-0-1774451771243.json` and `output/web-game/state-1-1774451774458.json`.
+- Rebuilt `world-gateway`, `worldd-region-0-0`, and `worldd-region-1-0` on the home server after the handoff fix and re-verified `https://land.jrbussard.com` can enter the live world from a forced duplicate-username starting state.
 
 TODOs (next agent):
 - If browser console noise from handled 409 auth probes matters, wrap device auth with a preflight reservation flow instead of relying on retry-after-failure.

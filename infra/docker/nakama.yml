@@ -1,0 +1,15 @@
+name: jrland-nakama
+logger:
+  level: INFO
+database:
+  address:
+    - "postgres:postgres@postgres:5432/nakama"
+session:
+  token_expiry_sec: 86400
+socket:
+  server_key: defaultkey
+console:
+  username: admin
+  password: password
+runtime:
+  path: "/nakama/data/modules"

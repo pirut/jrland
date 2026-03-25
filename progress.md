@@ -1,5 +1,71 @@
 Original prompt: I want to make an MMO game. I want it to be a simple survival game for now. This is going to be a long term project so make sure you lay a good foundation so I can add in systems as I go. and make good notes so future agents can work on this. The game can be a simple 2d game with a procedurally generated world. The setting should be realistic and the art style should be minimalist
 
+Updates (2026-03-25, home server deployment pass):
+- Added browser-side recovery for Nakama device-auth username collisions in `apps/web/src/net/NakamaClient.js`; the client now rotates to a fresh generated username instead of falling back to offline mode when a cached/random handle is already taken.
+- Fixed the auth error classifiers to match `nakama-js` fetch behavior, which throws the raw `Response` object on failed auth requests.
+- Verified the recovery path against a local production build wired to `api.land.jrbussard.com` by forcing `jrland.username=probe` in `localStorage`; the client retried, landed in the live shared world, and kept `wss://world.land.jrbussard.com/r0/world` connected.
+
+Test log:
+- `npm run build -w apps/web` passed after the username-collision recovery changes.
+- `VITE_NAKAMA_HOST=api.land.jrbussard.com VITE_NAKAMA_PORT=443 VITE_NAKAMA_SSL=true VITE_NAKAMA_SERVER_KEY=030231627fbcdbd667345c639470753d npm run build -w apps/web` passed for a production-configured browser test.
+- Ran the `develop-web-game` Playwright client against the local production preview and captured successful live-world states in `output/web-game/state-0-1774451771243.json` and `output/web-game/state-1-1774451774458.json`.
+
+TODOs (next agent):
+- If browser console noise from handled 409 auth probes matters, wrap device auth with a preflight reservation flow instead of relying on retry-after-failure.
+
+Updates (2026-03-25, home server deployment pass):
+- Added a containerized `web` frontend image so the full JRLand stack can run from one `docker compose` command on a LAN server.
+- Parameterized `infra/docker/docker-compose.yml` with `PUBLIC_HOST` and added `infra/docker/home-server.env.example` for single-box deployment.
+- Split the Nakama runtime into its own Go module pinned to the official Nakama `3.22.0` dependency line so the plugin builds cleanly in `heroiclabs/nakama-pluginbuilder:3.22.0`.
+- Added a device-ID fallback in `apps/web/src/net/NakamaClient.js` so browsers without `crypto.randomUUID()` can still authenticate.
+- Added automatic client recovery for stale Nakama sessions so a rotated server key triggers re-auth instead of leaving the browser stuck on a 401.
+- Tightened compose networking so Postgres, Redis, NATS, MinIO, and `world-gateway` stay internal to the Docker network instead of being published on the host.
+- Parameterized Nakama console/session/runtime secrets through the home-server `.env` profile and removed the remaining insecure-default warnings from server startup.
+
+Test log:
+- `go test ./...` passed after isolating the Nakama runtime module.
+- `npm run build -w apps/web` passed after the device-ID fallback and stale-session recovery changes.
+- `npm run build:nakama` passed with the nested Nakama module.
+- Deployed the full stack to the LAN server at `10.0.0.131` and verified `http://10.0.0.131:8080`, `http://10.0.0.131:7350/healthcheck`, and `http://10.0.0.131:7355/healthz`.
+- Confirmed Postgres, Redis, `world-gateway`, and MinIO were no longer reachable from the LAN after removing host port bindings.
+- Ran the `develop-web-game` Playwright client against `http://10.0.0.131:8080`; latest successful state confirmed auth, `rpc_world_resolve`, websocket join, chunk streaming, and a connected player in `region-0-0`.
+
+TODOs (next agent):
+- Decide whether the Nakama Console port should remain exposed at all for the home-server profile.
+- Consider adding a dedicated deploy script so server `.env` generation does not rely on ad hoc SSH commands.
+
+Updates (2026-03-25, region ownership + handoff pass):
+- Added explicit shared-world region math in `internal/regions`, with canonical `region-x-z` IDs and position-to-region mapping.
+- `world-gateway` now resolves live region owners from Redis, issues target-region handoff tickets, and only falls back to the static endpoint for the default local region.
+- `worldd` now self-registers its owned region, subscribes to NATS handoff subjects, checkpoints character state before transfer, and emits `HandoffPrepare` messages when a player crosses a region seam.
+- The browser `WorldSocketAdapter` now preconnects to the next world socket during handoff and swaps regions without treating the old socket close as a normal disconnect.
+- Local compose topology now includes two world servers (`region-0-0` and `region-1-0`) so region crossing can be exercised without Agones.
+- Added browser test hooks for the new MMO client (`window.startGame`, `window.advanceTime`, `window.render_game_to_text`) and a data-URL favicon to remove the default 404 noise.
+
+Test log:
+- `go test ./...` passed after adding NATS-backed handoff code.
+- `npm run build` passed for the full workspace including the Nakama plugin build.
+- Ran the `develop-web-game` Playwright client against the active Vite app and verified the new MMO shell screenshot plus `render_game_to_text` output; no new console errors remained after adding the favicon.
+
+TODOs (next agent):
+- Validate the full handoff path against a live local stack once Docker or equivalent services are available.
+- Replace the current single-target-region assumption with dynamic region fleet expansion in Agones.
+- Expand HandoffPrepare/Commit into full state acknowledgement and retry semantics instead of the current optimistic swap.
+
+Updates (2026-03-25, Agones + Nakama foundation):
+- Restructured the repo into a workspace layout with `apps/web` for the active client and Go services for `world-gateway`, `worldd`, and Nakama runtime code.
+- Added `proto/world.proto` plus generated browser and Go protobuf contracts for the world websocket.
+- Implemented a new `Three.js` browser client with Nakama auth, `rpc_world_resolve`, world websocket join, low-poly voxel rendering, shared movement, and server-authoritative block mining/building.
+- Implemented `world-gateway` ticket issuance and `worldd` authoritative world simulation with PostgreSQL-backed character/chunk persistence hooks.
+- Added local Docker orchestration and first-pass Agones fleet manifests as the new operational path.
+
+Updates (2026-03-24, architecture reset):
+- Reframed the project as a browser-first low-poly shared-world survival MMO rather than a client-simulated prototype with a synchronized database.
+- `docs/mmo-plan.md` now supersedes the older SpacetimeDB-first direction.
+- New target architecture: authoritative region servers for one logical world, with Agones-orchestrated dedicated servers as the preferred long-term backend shape.
+
+Original prompt: I want to make an MMO game. I want it to be a simple survival game for now. This is going to be a long term project so make sure you lay a good foundation so I can add in systems as I go. and make good notes so future agents can work on this. The game can be a simple 2d game with a procedurally generated world. The setting should be realistic and the art style should be minimalist
+
 Notes:
 - Initialized minimal static web project (index.html/style.css/game.js) with a single canvas and overlay UI.
 - Focused on deterministic world generation hooks, state separation, and a procedural tile system as a foundation for future MMO work.
@@ -459,3 +525,46 @@ Test log:
 TODOs (next agent):
 - Consider adding a "Sort" button per tab (stack consolidation + type grouping) for one-click cleanup.
 - Consider replacing text labels in tabs with compact icon+label chips to improve scan speed at small viewport sizes.
+
+Updates (2026-03-25, web client loop + offline practice pass):
+- Reworked the active `apps/web` client loop around a fixed-step local simulation with smoothed movement, arrow-key support, and keyboard shortcuts for world interaction (`Space` mines, `B` places).
+- Added an explicit offline practice range that boots instantly when the live stack is unavailable or when `Practice Offline` is clicked, so the browser client remains playable and testable without Nakama/worldd.
+- Added a deterministic practice terrain generator with a carved spawn clearing, local inventories, wandering NPC stand-ins, and browser-test hooks that keep `render_game_to_text` meaningful during offline runs.
+- Upgraded the Three.js renderer with chunk-scoped terrain rebuilds instead of full-scene rebuilds on every chunk mutation, plus cached block materials/geometry and fewer steady-state allocations in the camera path.
+- Refreshed the shell presentation and HUD copy so live/offline mode, selection state, and controls are visible without covering the whole viewport.
+- Added reticle-centered interaction support so keyboard-only automated runs can mine/place reliably even before any mouse movement.
+
+Test log:
+- `npm run build -w apps/web` passed after the loop, renderer, and practice-range changes.
+- Ran the `develop-web-game` Playwright client against `http://localhost:4173` using the offline practice hook and verified fresh screenshots/state dumps in `output/web-game/`.
+- Latest verified state: `output/web-game/state-1-1774445383097.json` shows offline practice active, 25 chunks loaded, 4 visible rangers, hover/placement state populated, and grass inventory changing under interaction.
+- Latest verified screenshot: `output/web-game/shot-1-1774445383097.png` shows the cleared spawn area, visible player silhouette, hover/placement outline, and readable HUD.
+- Reloaded the live page after the renderer update and confirmed the previous Three.js shadow warning was gone from the current build.
+
+TODOs (next agent):
+- Tune the practice-range camera offset and spawn choreography further so movement reveals more terrain depth and less canopy at the default angle.
+- Decide whether to keep the offline sandbox purely as a dev/practice tool or let it evolve into a first-class single-player fallback with persistence.
+- The web bundle is still large (`~799 kB` minified JS); the next worthwhile perf pass is code-splitting protobuf/network paths away from the offline shell.
+
+Updates (2026-03-25, browser-to-LAN backend connectivity pass):
+- Changed the browser Nakama client defaults so, when `VITE_NAKAMA_HOST` is not set, it uses the current page hostname instead of hardcoded `127.0.0.1`. That lets a site served from the network host connect back to Nakama on that same host without a localhost-only build.
+- Changed the default Nakama SSL mode to follow the page protocol when `VITE_NAKAMA_SSL` is unset, while still allowing an explicit override via env.
+- Added `PUBLIC_WS_SCHEME` to the Docker home-server path and used it for the public world websocket URLs advertised by `world-gateway`/`worldd`, so HTTPS deployments can publish `wss://...` endpoints instead of `ws://...`.
+- Documented the browser mixed-content constraint in `README.md`: HTTPS pages must use secure backend transports (`https://` for Nakama and `wss://` for world sockets) or the browser will block the connection.
+
+Test log:
+- `npm run build -w apps/web` passed after the browser-host fallback and deployment-config changes.
+- Sanity-checked `infra/docker/docker-compose.yml` to confirm `PUBLIC_WS_SCHEME` is now wired into the public world websocket URLs.
+
+TODOs (next agent):
+- If the public site will sit behind a reverse proxy or CDN, decide whether Nakama should remain on a raw port (`:7350`) or move behind a first-class HTTPS origin/subdomain.
+
+Deployment note (2026-03-25):
+- Synced the browser/deployment changes to the LAN server at `10.0.0.131:/home/jrbussard/jrland`.
+- Rebuilt and restarted the relevant containers with:
+  - `docker compose --env-file infra/docker/.env -f infra/docker/docker-compose.yml up -d --build web world-gateway worldd-region-0-0 worldd-region-1-0`
+- Re-verified:
+  - `http://10.0.0.131:8080` returned `200 OK`
+  - `http://10.0.0.131:7350/healthcheck` returned `{}` 
+  - `http://10.0.0.131:7355/healthz` returned `{"ok":true,...}`
+  - Playwright run against `http://10.0.0.131:8080` produced a live-connected state in `output/web-game/state-1-1774446990646.json` with `mode:"live"` and `connected:true`.

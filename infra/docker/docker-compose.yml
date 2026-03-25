@@ -1,0 +1,203 @@
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      PUBLIC_HTTP_PORT: ${PUBLIC_HTTP_PORT:-8080}
+      PUBLIC_API_HOST: ${PUBLIC_API_HOST:-api.example.com}
+      PUBLIC_WORLD_HOST: ${PUBLIC_WORLD_HOST:-world.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      nakama:
+        condition: service_started
+      worldd-region-0-0:
+        condition: service_started
+      worldd-region-1-0:
+        condition: service_started
+    ports:
+      - "${PUBLIC_HTTP_PORT:-8080}:${PUBLIC_HTTP_PORT:-8080}"
+      - "443:443"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: jrland
+    expose:
+      - "5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jrland"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    expose:
+      - "6379"
+
+  nats:
+    image: nats:2.11-alpine
+    restart: unless-stopped
+    expose:
+      - "4222"
+      - "8222"
+
+  minio:
+    image: minio/minio:RELEASE.2025-02-28T09-55-16Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: jrland
+      MINIO_ROOT_PASSWORD: jrlandlocal
+    expose:
+      - "9000"
+      - "9001"
+    volumes:
+      - minio-data:/data
+
+  world-gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.world-gateway
+    restart: unless-stopped
+    environment:
+      WORLD_GATEWAY_ADDR: ":8081"
+      WORLD_DB_DSN: postgres://postgres:postgres@postgres:5432/jrland?sslmode=disable
+      REDIS_ADDR: redis:6379
+      WORLD_JWT_SECRET: ${WORLD_JWT_SECRET:-jrland-dev-secret}
+      WORLD_ID: main
+      WORLD_DEFAULT_REGION_ID: region-0-0
+      WORLD_STATIC_WS_URL: ${PUBLIC_WS_SCHEME:-ws}://${PUBLIC_WORLD_HOST:-localhost}/r0/world
+      WORLD_STATIC_HEALTH_URL: http://worldd-region-0-0:7355/healthz
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    expose:
+      - "8081"
+
+  worldd-region-0-0:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worldd
+    restart: unless-stopped
+    environment:
+      WORLDD_ADDR: ":7355"
+      WORLD_DB_DSN: postgres://postgres:postgres@postgres:5432/jrland?sslmode=disable
+      REDIS_ADDR: redis:6379
+      NATS_URL: nats://nats:4222
+      WORLD_ID: main
+      WORLDD_REGION_ID: region-0-0
+      WORLD_GATEWAY_CONSUME_URL: http://world-gateway:8081/internal/world/consume-ticket
+      WORLD_GATEWAY_ISSUE_HANDOFF_URL: http://world-gateway:8081/internal/world/issue-handoff
+      WORLDD_PUBLIC_WS_URL: ${PUBLIC_WS_SCHEME:-ws}://${PUBLIC_WORLD_HOST:-localhost}/r0/world
+      WORLDD_PUBLIC_HEALTH_URL: http://worldd-region-0-0:7355/healthz
+    depends_on:
+      postgres:
+        condition: service_healthy
+      world-gateway:
+        condition: service_started
+      redis:
+        condition: service_started
+      nats:
+        condition: service_started
+    ports:
+      - "${WORLD_REGION_0_PORT:-7355}:7355"
+
+  worldd-region-1-0:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worldd
+    restart: unless-stopped
+    environment:
+      WORLDD_ADDR: ":7355"
+      WORLD_DB_DSN: postgres://postgres:postgres@postgres:5432/jrland?sslmode=disable
+      REDIS_ADDR: redis:6379
+      NATS_URL: nats://nats:4222
+      WORLD_ID: main
+      WORLDD_REGION_ID: region-1-0
+      WORLD_GATEWAY_CONSUME_URL: http://world-gateway:8081/internal/world/consume-ticket
+      WORLD_GATEWAY_ISSUE_HANDOFF_URL: http://world-gateway:8081/internal/world/issue-handoff
+      WORLDD_PUBLIC_WS_URL: ${PUBLIC_WS_SCHEME:-ws}://${PUBLIC_WORLD_HOST:-localhost}/r1/world
+      WORLDD_PUBLIC_HEALTH_URL: http://worldd-region-1-0:7355/healthz
+    depends_on:
+      postgres:
+        condition: service_healthy
+      world-gateway:
+        condition: service_started
+      redis:
+        condition: service_started
+      nats:
+        condition: service_started
+    ports:
+      - "${WORLD_REGION_1_PORT:-7356}:7355"
+
+  nakama:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.nakama
+    restart: unless-stopped
+    environment:
+      NAKAMA_SERVER_KEY: ${NAKAMA_SERVER_KEY:-defaultkey}
+      NAKAMA_CONSOLE_USERNAME: ${NAKAMA_CONSOLE_USERNAME:-jrland-admin}
+      NAKAMA_CONSOLE_PASSWORD: ${NAKAMA_CONSOLE_PASSWORD:-password}
+      NAKAMA_CONSOLE_SIGNING_KEY: ${NAKAMA_CONSOLE_SIGNING_KEY:-console-signing-key}
+      NAKAMA_SESSION_ENCRYPTION_KEY: ${NAKAMA_SESSION_ENCRYPTION_KEY:-session-encryption-key}
+      NAKAMA_SESSION_REFRESH_ENCRYPTION_KEY: ${NAKAMA_SESSION_REFRESH_ENCRYPTION_KEY:-session-refresh-encryption-key}
+      NAKAMA_RUNTIME_HTTP_KEY: ${NAKAMA_RUNTIME_HTTP_KEY:-runtime-http-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      world-gateway:
+        condition: service_started
+    entrypoint:
+      - "/bin/sh"
+      - "-ecx"
+      - >
+        /nakama/nakama migrate up --database.address postgres:postgres@postgres:5432/nakama &&
+        exec /nakama/nakama --config /nakama/data/local.yml --database.address postgres:postgres@postgres:5432/nakama
+        --socket.server_key "$$NAKAMA_SERVER_KEY"
+        --console.username "$$NAKAMA_CONSOLE_USERNAME"
+        --console.password "$$NAKAMA_CONSOLE_PASSWORD"
+        --console.signing_key "$$NAKAMA_CONSOLE_SIGNING_KEY"
+        --session.encryption_key "$$NAKAMA_SESSION_ENCRYPTION_KEY"
+        --session.refresh_encryption_key "$$NAKAMA_SESSION_REFRESH_ENCRYPTION_KEY"
+        --runtime.http_key "$$NAKAMA_RUNTIME_HTTP_KEY"
+    ports:
+      - "${NAKAMA_HTTP_PORT:-7350}:7350"
+      - "${NAKAMA_CONSOLE_PORT:-7351}:7351"
+    expose:
+      - "7349"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        VITE_NAKAMA_HOST: ${PUBLIC_API_HOST:-127.0.0.1}
+        VITE_NAKAMA_PORT: ${NAKAMA_HTTP_PORT:-7350}
+        VITE_NAKAMA_SSL: ${VITE_NAKAMA_SSL:-false}
+        VITE_NAKAMA_SERVER_KEY: ${NAKAMA_SERVER_KEY:-defaultkey}
+    restart: unless-stopped
+    depends_on:
+      nakama:
+        condition: service_started
+    ports:
+      - "${WEB_PORT:-8088}:80"
+
+volumes:
+  caddy-config:
+  caddy-data:
+  postgres-data:
+  minio-data:

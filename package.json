@@ -1,23 +1,27 @@
 {
   "name": "jrland",
-  "version": "1.0.0",
-  "description": "",
-  "main": "game.js",
+  "private": true,
+  "version": "2.0.0",
+  "description": "JRLand shared-world MMO monorepo",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web && npm run build:go && npm run build:nakama",
+    "build:web": "npm run build -w apps/web",
+    "build:go": "go build ./services/world-gateway ./services/worldd",
+    "build:nakama": "mkdir -p tmp && (cd services/nakama && go build --trimpath --buildmode=plugin -o ../../tmp/nakama-backend.so .)",
+    "preview": "npm run preview -w apps/web",
+    "proto:go": "PATH=\"$(go env GOPATH)/bin:$PATH\" protoc --go_out=. --go_opt=paths=source_relative proto/world.proto",
+    "proto:web": "pbjs -t static-module -w es6 -o apps/web/src/net/generated/world-proto.js proto/world.proto",
+    "proto:generate": "npm run proto:go && npm run proto:web",
+    "test": "npm run build -w apps/web && go test ./..."
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "license": "MIT",
   "devDependencies": {
     "playwright": "^1.58.1",
-    "vite": "^7.3.1"
-  },
-  "dependencies": {
-    "spacetimedb": "^1.12.0"
+    "protobufjs-cli": "^1.1.3"
   }
 }

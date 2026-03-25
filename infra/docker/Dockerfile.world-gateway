@@ -1,0 +1,15 @@
+FROM golang:1.26 AS builder
+WORKDIR /workspace
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY internal ./internal
+COPY proto ./proto
+COPY services/world-gateway ./services/world-gateway
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/world-gateway ./services/world-gateway
+
+FROM gcr.io/distroless/base-debian12
+COPY --from=builder /out/world-gateway /usr/local/bin/world-gateway
+ENTRYPOINT ["/usr/local/bin/world-gateway"]

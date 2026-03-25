@@ -1,0 +1,17 @@
+{
+  http_port {$PUBLIC_HTTP_PORT}
+}
+
+{$PUBLIC_API_HOST} {
+  reverse_proxy nakama:7350
+}
+
+{$PUBLIC_WORLD_HOST} {
+  handle_path /r0/* {
+    reverse_proxy worldd-region-0-0:7355
+  }
+
+  handle_path /r1/* {
+    reverse_proxy worldd-region-1-0:7355
+  }
+}

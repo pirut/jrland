@@ -1,0 +1,44 @@
+apiVersion: agones.dev/v1
+kind: Fleet
+metadata:
+  name: worldd-main
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  template:
+    spec:
+      ports:
+        - name: world
+          portPolicy: Dynamic
+          containerPort: 7355
+          protocol: TCP
+      health:
+        initialDelaySeconds: 20
+        periodSeconds: 10
+        failureThreshold: 3
+      template:
+        spec:
+          containers:
+            - name: worldd
+              image: ghcr.io/jrbussard/jrland/worldd:latest
+              imagePullPolicy: Always
+              env:
+                - name: WORLDD_ADDR
+                  value: ":7355"
+                - name: WORLD_ID
+                  value: "main"
+                - name: WORLDD_REGION_ID
+                  value: "region-0-0"
+                - name: WORLD_DB_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: jrland-world-db
+                      key: dsn
+                - name: WORLD_GATEWAY_CONSUME_URL
+                  value: "http://world-gateway.default.svc.cluster.local:8081/internal/world/consume-ticket"
+                - name: WORLD_GATEWAY_ISSUE_HANDOFF_URL
+                  value: "http://world-gateway.default.svc.cluster.local:8081/internal/world/issue-handoff"
+              ports:
+                - containerPort: 7355
+                  name: world

@@ -1,0 +1,10 @@
+node_modules
+output
+.codex
+dist
+.DS_Store
+*.so
+coverage
+tmp
+apps/web/dist
+.git
